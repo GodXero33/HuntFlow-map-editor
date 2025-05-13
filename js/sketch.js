@@ -1,12 +1,10 @@
 import { Editor } from "./editor.js";
 
 const ctx = canvas.getContext('2d');
-
-let width = 0;
-let height = 0;
+const editor = new Editor(canvas);
 let animationFrame = null;
 
-const editor = new Editor();
+console.log(editor);
 
 function animate () {
 	editor.draw(ctx);
