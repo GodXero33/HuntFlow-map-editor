@@ -17,6 +17,7 @@ class EditorImageObject extends EditorObject {
 		super(x, y, w, h);
 
 		this.img = img;
+		this.h = img.height * w / img.width;
 	}
 
 	draw (ctx) {
@@ -32,6 +33,7 @@ class Editor {
 
 		this.objects = [];
 		this.loadedImages = new Map();
+		this.loadingImages = new Map();
 
 		this.#initEvents();
 	}
@@ -66,18 +68,26 @@ class Editor {
 				const src =  event.target.result;
 
 				if (this.loadedImages.has(src)) {
-					// Image is already loaded
+					// Image is already in loaded
 					this.add(new EditorImageObject(this.loadedImages.get(src), dropX, dropY));
+					return;
+				}
+
+				if (this.loadingImages.has(src)) {
+					// Image is already in loading
+					this.add(new EditorImageObject(this.loadingImages.get(src), dropX, dropY));
 					return;
 				}
 
 				const img = new Image();
 
 				img.addEventListener('load', () => {
+					this.loadingImages.delete(src);
+					this.loadedImages.set(src, img);
 					this.add(new EditorImageObject(img, dropX, dropY));
 				});
 
-				this.loadedImages.set(src, img);
+				this.loadingImages.set(src, img);
 
 				img.src = src;
 			});
