@@ -1,3 +1,7 @@
+const EDITOR_SETTINGS = {
+	selector_dots_size: 15
+};
+
 class EditorObject {
 	constructor (x, y, w, h, r) {
 		this.x = x;
@@ -8,6 +12,8 @@ class EditorObject {
 	}
 
 	draw (ctx) {}
+
+	drawSelect (ctx) {}
 
 	update () {}
 }
@@ -23,6 +29,49 @@ class EditorImageObject extends EditorObject {
 	draw (ctx) {
 		ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
 	}
+
+	drawSelect (ctx) {
+		ctx.save();
+		ctx.strokeStyle = '#ffffff';
+		ctx.lineWidth = 2;
+		ctx.shadowColor = '#000000';
+		ctx.shadowBlur = 5;
+		
+		ctx.strokeRect(this.x, this.y, this.w, this.h);
+
+		ctx.lineWidth = EDITOR_SETTINGS.selector_dots_size;
+		ctx.lineCap = 'round';
+
+		ctx.beginPath();
+
+		ctx.moveTo(this.x, this.y);
+		ctx.lineTo(this.x, this.y);
+
+		ctx.moveTo(this.x + this.w * 0.5, this.y);
+		ctx.lineTo(this.x + this.w * 0.5, this.y);
+
+		ctx.moveTo(this.x + this.w, this.y);
+		ctx.lineTo(this.x + this.w, this.y);
+
+		ctx.moveTo(this.x + this.w, this.y + this.h * 0.5);
+		ctx.lineTo(this.x + this.w, this.y + this.h * 0.5);
+
+		ctx.moveTo(this.x + this.w, this.y + this.h);
+		ctx.lineTo(this.x + this.w, this.y + this.h);
+
+		ctx.moveTo(this.x + this.w * 0.5, this.y + this.h);
+		ctx.lineTo(this.x + this.w * 0.5, this.y + this.h);
+
+		ctx.moveTo(this.x, this.y + this.h);
+		ctx.lineTo(this.x, this.y + this.h);
+
+		ctx.moveTo(this.x, this.y + this.h * 0.5);
+		ctx.lineTo(this.x, this.y + this.h * 0.5);
+
+		ctx.stroke();
+
+		ctx.restore();
+	}
 }
 
 class Editor {
@@ -34,6 +83,11 @@ class Editor {
 		this.objects = [];
 		this.loadedImages = new Map();
 		this.loadingImages = new Map();
+
+		this.selectedObjects = [];
+		this.selectBoundingRect = null;
+
+		this.hoveredObject = null;
 
 		this.#initEvents();
 	}
@@ -98,13 +152,32 @@ class Editor {
 
 	#mousedown (event) {}
 
-	#mousemove (event) {}
+	#mousemove (event) {
+		const x = event.x - this.width * 0.5;
+		const y = event.y - this.height * 0.5;
+
+		this.#checkForHoveredObject(x, y);
+	}
 
 	#mouseup (event) {}
 
 	#keydown (event) {}
 
 	#keyup (event) {}
+
+	#checkForHoveredObject (x, y) {
+		const offset = EDITOR_SETTINGS.selector_dots_size * 0.5;
+
+		this.hoveredObject = this.objects.find(object => {
+			return x > object.x - offset && x < object.x + object.w + offset && y > object.y - offset && y < object.y + object.h + offset;
+		});
+
+		if (this.hoveredObject) {
+			this.canvas.style.cursor = 'pointer';
+		} else {
+			this.canvas.style.cursor = 'default';
+		}
+	}
 
 	draw (ctx) {
 		ctx.clearRect(0, 0, this.width, this.height);
@@ -115,10 +188,22 @@ class Editor {
 
 		this.objects.forEach(object => object.draw(ctx));
 
+		if (this.hoveredObject) this.#drawHoveredObject(ctx);
+
 		ctx.setTransform(transform);
 	}
 
 	update () {}
+
+	#drawHoveredObject (ctx) {
+		ctx.globalAlpha = 0.8;
+
+		this.hoveredObject.draw(ctx);
+
+		ctx.globalAlpha = 1;
+
+		this.hoveredObject.drawSelect(ctx);
+	}
 
 	add (object) {
 		if (!(object instanceof EditorObject)) return;
