@@ -1,5 +1,6 @@
 import { Editor } from "./editor.js";
 import { EditorImageObject } from "./editor.object.js";
+import _tImage from "./init-image-tmp.js";
 
 const ctx = canvas.getContext('2d');
 const editor = new Editor(canvas);

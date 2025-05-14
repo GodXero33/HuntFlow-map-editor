@@ -1,11 +1,11 @@
-import { EditorObject } from "./editor.object.js";
-import { drawSelectRect, injectEditorSettingsRefForUtil } from "./util.js";
+import { EditorImageObject, EditorObject } from "./editor.object.js";
+import { drawSelectRect } from "./util.js";
 
-const EDITOR_SETTINGS = {
-	selector_dots_size: 15
-};
+let EDITOR_SETTINGS = null;
 
-injectEditorSettingsRefForUtil(EDITOR_SETTINGS);
+function injectEditorSettingsRefForEditor (editorSettingsRef) {
+	EDITOR_SETTINGS = editorSettingsRef;
+}
 
 class Editor {
 	constructor (canvas) {
@@ -248,5 +248,6 @@ class Editor {
 }
 
 export {
+	injectEditorSettingsRefForEditor,
 	Editor
 };
