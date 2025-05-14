@@ -35,12 +35,6 @@ class Editor {
 			}
 		];
 
-		this.keyBindStatus = {
-			shift: false,
-			control: false,
-			alt: false
-		};
-
 		this.#initEvents();
 	}
 
@@ -218,7 +212,9 @@ class Editor {
 	}
 
 	#updateSelectedObjects (object) {
-		if (!this.downKeys.has('shift')) {
+		const isShiftDown = this.downKeys.size == 1 && (this.downKeys.has('shift') || this.downKeys.has('control'));
+
+		if (!isShiftDown) {
 			const firstSelectedObject = this.selectedObjects[0];
 			this.selectedObjects.length = 0;
 
