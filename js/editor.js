@@ -23,8 +23,16 @@ class Editor {
 		this.hoveredObject = null;
 		this.mousedownObject = null;
 
+		this.downKeys = new Set();
+
 		this.keyBinds = {
-			multiSelect: false
+			delete: ['shift+x', 'delete']
+		};
+
+		this.keyBindStatus = {
+			shift: false,
+			control: false,
+			alt: false
 		};
 
 		this.#initEvents();
@@ -135,30 +143,25 @@ class Editor {
 	}
 
 	#keydown (event) {
-		const key = event.key;
+		this.downKeys.add(event.key.toLowerCase());
 
-		if (key === 'Shift') {
-			this.keyBinds.multiSelect = true;
+		if (this.keyBinds.delete.find(bind => {
+			const parts = bind.split('+');
+
+			if (this.downKeys.size !== parts.length) return false;
+
+			for (const key of this.downKeys)
+				if (!parts.includes(key)) return false;
+
+			return true;
+		})) {
+			this.#deleteSelected();
 			return;
-		}
-
-		if (key === 'Delete') {
-			this.selectedObjects.forEach(object => {
-				this.objects.splice(this.objects.findIndex(checkObject => checkObject === object), 1);
-			});
-
-			this.selectedObjects.length = 0;
-			this.selectBoundingRect = null;
 		}
 	}
 
 	#keyup (event) {
-		const key = event.key;
-
-		if (key === 'Shift') {
-			this.keyBinds.multiSelect = false;
-			return;
-		}
+		this.downKeys.delete(event.key.toLowerCase());
 	}
 
 	#isMouseInSelectBoundingRect (x, y) {
@@ -179,7 +182,7 @@ class Editor {
 	}
 
 	#updateSelectedObjects (object) {
-		if (!this.keyBinds.multiSelect) {
+		if (!this.downKeys.has('shift')) {
 			const firstSelectedObject = this.selectedObjects[0];
 			this.selectedObjects.length = 0;
 
@@ -219,6 +222,15 @@ class Editor {
 
 	#updateCursor (cursor) {
 		this.canvas.style.cursor = cursor;
+	}
+
+	#deleteSelected () {
+		this.selectedObjects.forEach(object => {
+			this.objects.splice(this.objects.findIndex(checkObject => checkObject === object), 1);
+		});
+
+		this.selectedObjects.length = 0;
+		this.selectBoundingRect = null;
 	}
 
 	draw (ctx) {
