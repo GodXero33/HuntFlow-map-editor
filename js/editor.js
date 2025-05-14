@@ -142,11 +142,42 @@ class Editor {
 		}
 	}
 
+	#splitKeyBind (bind) {
+		const result = [];
+		let buffer = '';
+		let i = 0;
+
+		while (i < bind.length) {
+			if (bind[i] === '+') {
+				if (bind[i + 1] === '+') {
+					if (buffer) result.push(buffer);
+
+					result.push('+');
+
+					buffer = '';
+					i += 2;
+				} else {
+					if (buffer) result.push(buffer);
+
+					buffer = '';
+					i++;
+				}
+			} else {
+				buffer += bind[i];
+				i++;
+			}
+		}
+
+		if (buffer) result.push(buffer);
+
+		return result;
+	}
+
 	#keydown (event) {
 		this.downKeys.add(event.key.toLowerCase());
 
 		if (this.keyBinds.delete.find(bind => {
-			const parts = bind.split('+');
+			const parts = this.#splitKeyBind(bind);
 
 			if (this.downKeys.size !== parts.length) return false;
 
