@@ -25,9 +25,15 @@ class Editor {
 
 		this.downKeys = new Set();
 
-		this.keyBinds = {
-			delete: ['shift+x', 'delete']
-		};
+		this.keyBinds = [
+			{
+				name: 'delete',
+				binds: ['shift+x', 'delete'],
+				action: () => {
+					this.#deleteSelected();
+				}
+			}
+		];
 
 		this.keyBindStatus = {
 			shift: false,
@@ -176,19 +182,18 @@ class Editor {
 	#keydown (event) {
 		this.downKeys.add(event.key.toLowerCase());
 
-		if (this.keyBinds.delete.find(bind => {
-			const parts = this.#splitKeyBind(bind);
+		this.keyBinds.forEach(bindObject => {
+			if (typeof bindObject.action == 'function' && bindObject.binds.find(bind => {
+				const parts = this.#splitKeyBind(bind);
 
-			if (this.downKeys.size !== parts.length) return false;
+				if (this.downKeys.size !== parts.length) return false;
 
-			for (const key of this.downKeys)
-				if (!parts.includes(key)) return false;
+				for (const key of this.downKeys)
+					if (!parts.includes(key)) return false;
 
-			return true;
-		})) {
-			this.#deleteSelected();
-			return;
-		}
+				return true;
+			})) bindObject.action();
+		});
 	}
 
 	#keyup (event) {
