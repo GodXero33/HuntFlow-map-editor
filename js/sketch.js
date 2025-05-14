@@ -1,10 +1,12 @@
-import { Editor, EditorImageObject } from "./editor.js";
+import { Editor } from "./editor.js";
+import { EditorImageObject } from "./editor.object.js";
 
 const ctx = canvas.getContext('2d');
 const editor = new Editor(canvas);
 let animationFrame = null;
 
 editor.add(new EditorImageObject(_tImage, 0, 0));
+editor.add(new EditorImageObject(_tImage, 200, 0));
 
 console.log(editor);
 
