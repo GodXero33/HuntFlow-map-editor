@@ -141,6 +141,15 @@ class Editor {
 			this.keyBinds.multiSelect = true;
 			return;
 		}
+
+		if (key === 'Delete') {
+			this.selectedObjects.forEach(object => {
+				this.objects.splice(this.objects.findIndex(checkObject => checkObject === object), 1);
+			});
+
+			this.selectedObjects.length = 0;
+			this.selectBoundingRect = null;
+		}
 	}
 
 	#keyup (event) {
