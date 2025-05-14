@@ -1,4 +1,31 @@
 let EDITOR_SETTINGS = null;
+let drawDashedRectDashOffset = 0;
+let canDrawDashedRectDashOffsetPlay = true;
+
+function playDrawDashedRectDashOffset () {
+	if (!canDrawDashedRectDashOffsetPlay) return;
+
+	canDrawDashedRectDashOffsetPlay = false;
+	drawDashedRectDashOffset += 1;
+
+	setTimeout(() => {
+		canDrawDashedRectDashOffsetPlay = true;
+	}, 50);
+}
+
+function drawDashedRect (ctx, rect, color = '#ffffff') {
+	playDrawDashedRectDashOffset();
+	ctx.save();
+
+	ctx.strokeStyle = color;
+	ctx.lineWidth = 2;
+	ctx.lineDashOffset = drawDashedRectDashOffset;
+
+	ctx.setLineDash([5, 5]);
+	ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+
+	ctx.restore();
+}
 
 function drawSelectRect (ctx, rect, color = '#ffffff') {
 	ctx.save();
@@ -48,5 +75,6 @@ function injectEditorSettingsRefForUtil (editorSettingsRef) {
 
 export {
 	injectEditorSettingsRefForUtil,
-	drawSelectRect
+	drawSelectRect,
+	drawDashedRect
 };

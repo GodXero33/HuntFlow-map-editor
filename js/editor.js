@@ -1,5 +1,5 @@
 import { EditorImageObject, EditorObject } from "./editor.object.js";
-import { drawSelectRect } from "./util.js";
+import { drawDashedRect, drawSelectRect } from "./util.js";
 
 let EDITOR_SETTINGS = null;
 
@@ -213,7 +213,9 @@ class Editor {
 	}
 
 	draw (ctx) {
-		ctx.clearRect(0, 0, this.width, this.height);
+		ctx.fillStyle = EDITOR_SETTINGS.colors.background;
+
+		ctx.fillRect(0, 0, this.width, this.height);
 
 		const transform = ctx.getTransform();
 
@@ -223,7 +225,11 @@ class Editor {
 
 		if (this.hoveredObject) this.#drawHoveredObject(ctx);
 
-		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, '#ff0000');
+		if (this.selectBoundingRect) {
+			drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select);
+
+			if (this.selectedObjects.length != 1) this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select));
+		}
 
 		ctx.setTransform(transform);
 	}
@@ -235,7 +241,7 @@ class Editor {
 
 		ctx.globalAlpha = 1;
 
-		drawSelectRect(ctx, this.hoveredObject);
+		drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover);
 	}
 
 	update () {}

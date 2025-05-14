@@ -8,6 +8,9 @@ let animationFrame = null;
 
 editor.add(new EditorImageObject(_tImage, 0, 0));
 editor.add(new EditorImageObject(_tImage, 200, 0));
+editor.add(new EditorImageObject(_tImage, 200, 200));
+editor.add(new EditorImageObject(_tImage, 0, -200));
+editor.add(new EditorImageObject(_tImage, -200, -200));
 
 console.log(editor);
 
