@@ -25,8 +25,30 @@ class Editor {
 		this.hoveredObject = null;
 		this.mousedownObject = null;
 
-		this.downKeys = new Set();
+		this.panStartPoint = null;
 
+		this.minZoomFact = 0.1;
+		this.maxZoomFact = 5;
+		this.editBlockZoomFact = 0.6;
+		this.prevZoom = 1;
+
+		this.downKeys = new Set();
+		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
+
+		this.transform = {
+			x: 0,
+			y: 0,
+			scale: 1
+		};
+
+		this.previousCursor = 'default';
+
+		this.#defineKeyBinds();
+		this.#initEvents();
+		this.addDummies();
+	}
+
+	#defineKeyBinds () {
 		this.keyBinds = [
 			{
 				name: 'delete',
@@ -50,11 +72,6 @@ class Editor {
 				}
 			}
 		];
-
-		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
-
-		this.#initEvents();
-		this.addDummies();
 	}
 
 	addDummies () {
@@ -73,74 +90,101 @@ class Editor {
 		window.addEventListener('mouseup', this.#mouseup.bind(this));
 		window.addEventListener('keydown', this.#keydown.bind(this));
 		window.addEventListener('keyup', this.#keyup.bind(this));
+		this.canvas.addEventListener('contextmenu', event => event.preventDefault());
+		this.canvas.addEventListener('dragover', event => event.preventDefault());
+		this.canvas.addEventListener('drop', this.#dropAction.bind(this));
+		this.canvas.addEventListener('wheel', this.#wheel.bind(this));
+		window.addEventListener('blur', () => this.downKeys.clear());
+	}
 
-		this.canvas.addEventListener('dragover', (event) => {
-			event.preventDefault();
-		});
+	#getMouseRelativePoint (x, y) {
+		return {
+			x: (x - this.transform.x - this.width * 0.5) / this.transform.scale,
+			y: (y - this.transform.y - this.height * 0.5) / this.transform.scale
+		};
+	}
 
-		this.canvas.addEventListener('drop', (event) => {
-			event.preventDefault();
+	#dropAction (event) {
+		event.preventDefault();
 
-			const files = event.dataTransfer.files;
-			const dropX = event.x - this.width * 0.5;
-			const dropY = event.y - this.height * 0.5;
-			
-			if (files.length == 0 || files[0].type !== 'image/png') {
-				console.warn('Wrong file');
+		const files = event.dataTransfer.files;
+		const mouseRelativePoint = this.#getMouseRelativePoint(event.x, event.y);
+		const dropX = mouseRelativePoint.x;
+		const dropY = mouseRelativePoint.y;
+
+		if (files.length == 0 || files[0].type !== 'image/png') {
+			console.warn('Wrong file');
+			return;
+		}
+
+		const file = files[0];
+		const reader = new FileReader();
+
+		reader.addEventListener('load', (event) => {
+			const src =  event.target.result;
+
+			if (this.loadedImages.has(src)) {
+				// Image is already in loaded
+				this.add(new EditorImageObject(this.loadedImages.get(src), dropX, dropY));
 				return;
 			}
 
-			const file = files[0];
-			const reader = new FileReader();
+			if (this.loadingImages.has(src)) {
+				// Image is already in loading
+				this.add(new EditorImageObject(this.loadingImages.get(src), dropX, dropY));
+				return;
+			}
 
-			reader.addEventListener('load', (event) => {
-				const src =  event.target.result;
+			const img = new Image();
 
-				if (this.loadedImages.has(src)) {
-					// Image is already in loaded
-					this.add(new EditorImageObject(this.loadedImages.get(src), dropX, dropY));
-					return;
-				}
-
-				if (this.loadingImages.has(src)) {
-					// Image is already in loading
-					this.add(new EditorImageObject(this.loadingImages.get(src), dropX, dropY));
-					return;
-				}
-
-				const img = new Image();
-
-				img.addEventListener('load', () => {
-					this.loadingImages.delete(src);
-					this.loadedImages.set(src, img);
-					this.add(new EditorImageObject(img, dropX, dropY));
-				});
-
-				this.loadingImages.set(src, img);
-
-				img.src = src;
+			img.addEventListener('load', () => {
+				this.loadingImages.delete(src);
+				this.loadedImages.set(src, img);
+				this.add(new EditorImageObject(img, dropX, dropY));
 			});
 
-			reader.readAsDataURL(file);
+			this.loadingImages.set(src, img);
+
+			img.src = src;
 		});
+
+		reader.readAsDataURL(file);
 	}
 
 	#mousedown (event) {
-		const x = event.x - this.width * 0.5;
-		const y = event.y - this.height * 0.5;
+		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 
-		this.mousedownObject = this.#getObjectOnMouse(x, y);
+		if (event.button === 0 && this.transform.scale > this.editBlockZoomFact) {
+			this.mousedownObject = this.#getObjectOnMouse(x, y);
+			return;
+		}
+
+		if (event.button === 2) {
+			this.panStartPoint = { x: event.x, y: event.y };
+		}
 	}
 
 	#mousemove (event) {
-		const x = event.x - this.width * 0.5;
-		const y = event.y - this.height * 0.5;
+		if (this.prevZoom === this.transform.scale) {
+			console.log(true); // try to make zoom on point where mouse is
+		}
+		if (this.panStartPoint) {
+			this.transform.x += event.x - this.panStartPoint.x;
+			this.transform.y += event.y - this.panStartPoint.y;
+			this.panStartPoint.x = event.x;
+			this.panStartPoint.y = event.y;
 
+			return;
+		}
+
+		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
 
-		if (this.hoveredObject) {
+		if (this.transform.scale < this.editBlockZoomFact) {
+			this.#updateCursor('not-allowed');
+		} else if (this.hoveredObject) {
 			this.#updateCursor('pointer');
 		} else if (this.#isMouseInSelectBoundingRect(x, y)) {
 			this.#updateCursor('move');
@@ -150,9 +194,14 @@ class Editor {
 	}
 
 	#mouseup (event) {
-		const x = event.x - this.width * 0.5;
-		const y = event.y - this.height * 0.5;
+		if (event.button === 2) {
+			this.panStartPoint = null;
+			return;
+		}
 
+		if (this.transform.scale < this.editBlockZoomFact) return;
+
+		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		const mouseupObject = this.#getObjectOnMouse(x, y);
 
 		if (this.mousedownObject && this.mousedownObject === mouseupObject) {
@@ -169,6 +218,19 @@ class Editor {
 				this.#updateCursor('pointer');
 			}
 		}
+	}
+
+	#wheel (event) {
+		let fact = this.transform.scale * (1 + Math.sign(event.deltaY) * 0.1);
+
+		if (fact > this.maxZoomFact) fact = this.maxZoomFact;
+		if (fact < this.minZoomFact) fact = this.minZoomFact;
+
+		this.prevZoom = this.transform.scale;
+		this.transform.scale = fact;
+		this.hoveredObject = null;
+
+		this.#updateCursor(fact < this.editBlockZoomFact ? 'not-allowed' : 'default');
 	}
 
 	#splitKeyBind (bind) {
@@ -224,11 +286,11 @@ class Editor {
 	}
 
 	#isMouseInSelectBoundingRect (x, y) {
-		return this.selectBoundingRect && this.isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5)
+		return this.selectBoundingRect && this.isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale)
 	}
 
 	#getObjectOnMouse (x, y) {
-		const offset = EDITOR_SETTINGS.selector_dots_size * 0.5;
+		const offset = EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale;
 
 		return this.objects.find(object => this.isPointInRect(object, x, y, offset));
 	}
@@ -282,6 +344,9 @@ class Editor {
 	}
 
 	#updateCursor (cursor) {
+		if (this.previousCursor === cursor) return;
+
+		this.previousCursor = cursor;
 		this.canvas.style.cursor = cursor;
 	}
 
@@ -318,6 +383,8 @@ class Editor {
 		const transform = ctx.getTransform();
 
 		ctx.translate(this.width * 0.5, this.height * 0.5);
+		ctx.translate(this.transform.x, this.transform.y);
+		ctx.scale(this.transform.scale, this.transform.scale);
 
 		this.objects.forEach(object => object.draw(ctx));
 
