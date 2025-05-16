@@ -26,7 +26,20 @@ class Editor {
 		this.mousedownObject = null;
 
 		this.downKeys = new Set();
+		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
 
+		this.transform = {
+			x: 0,
+			y: 0,
+			scale: 1
+		};
+
+		this.#defineKeyBinds();
+		this.#initEvents();
+		this.addDummies();
+	}
+
+	#defineKeyBinds () {
 		this.keyBinds = [
 			{
 				name: 'delete',
@@ -50,11 +63,6 @@ class Editor {
 				}
 			}
 		];
-
-		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
-
-		this.#initEvents();
-		this.addDummies();
 	}
 
 	addDummies () {
@@ -79,13 +87,21 @@ class Editor {
 		window.addEventListener('blur', () => this.downKeys.clear());
 	}
 
+	#getMouseRelativePoint (x, y) {
+		return {
+			x: (x - this.transform.x - this.width * 0.5) / this.transform.scale,
+			y: (y - this.transform.y - this.height * 0.5) / this.transform.scale
+		};
+	}
+
 	#dropAction (event) {
 		event.preventDefault();
 
 		const files = event.dataTransfer.files;
-		const dropX = event.x - this.width * 0.5;
-		const dropY = event.y - this.height * 0.5;
-		
+		const mouseRelativePoint = this.#getMouseRelativePoint(event.x, event.y);
+		const dropX = mouseRelativePoint.x;
+		const dropY = mouseRelativePoint.y;
+
 		if (files.length == 0 || files[0].type !== 'image/png') {
 			console.warn('Wrong file');
 			return;
@@ -126,16 +142,12 @@ class Editor {
 	}
 
 	#mousedown (event) {
-		const x = event.x - this.width * 0.5;
-		const y = event.y - this.height * 0.5;
-
+		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		this.mousedownObject = this.#getObjectOnMouse(x, y);
 	}
 
 	#mousemove (event) {
-		const x = event.x - this.width * 0.5;
-		const y = event.y - this.height * 0.5;
-
+		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
@@ -150,9 +162,7 @@ class Editor {
 	}
 
 	#mouseup (event) {
-		const x = event.x - this.width * 0.5;
-		const y = event.y - this.height * 0.5;
-
+		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		const mouseupObject = this.#getObjectOnMouse(x, y);
 
 		if (this.mousedownObject && this.mousedownObject === mouseupObject) {
@@ -224,11 +234,11 @@ class Editor {
 	}
 
 	#isMouseInSelectBoundingRect (x, y) {
-		return this.selectBoundingRect && this.isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5)
+		return this.selectBoundingRect && this.isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale)
 	}
 
 	#getObjectOnMouse (x, y) {
-		const offset = EDITOR_SETTINGS.selector_dots_size * 0.5;
+		const offset = EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale;
 
 		return this.objects.find(object => this.isPointInRect(object, x, y, offset));
 	}
@@ -318,6 +328,8 @@ class Editor {
 		const transform = ctx.getTransform();
 
 		ctx.translate(this.width * 0.5, this.height * 0.5);
+		ctx.translate(this.transform.x, this.transform.y);
+		ctx.scale(this.transform.scale, this.transform.scale);
 
 		this.objects.forEach(object => object.draw(ctx));
 
