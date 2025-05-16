@@ -73,56 +73,56 @@ class Editor {
 		window.addEventListener('mouseup', this.#mouseup.bind(this));
 		window.addEventListener('keydown', this.#keydown.bind(this));
 		window.addEventListener('keyup', this.#keyup.bind(this));
+		this.canvas.addEventListener('contextmenu', event => event.preventDefault());
+		this.canvas.addEventListener('dragover', event => event.preventDefault());
+		this.canvas.addEventListener('drop', this.#dropAction.bind(this));
+		window.addEventListener('blur', () => this.downKeys.clear());
+	}
 
-		this.canvas.addEventListener('dragover', (event) => {
-			event.preventDefault();
-		});
+	#dropAction (event) {
+		event.preventDefault();
 
-		this.canvas.addEventListener('drop', (event) => {
-			event.preventDefault();
+		const files = event.dataTransfer.files;
+		const dropX = event.x - this.width * 0.5;
+		const dropY = event.y - this.height * 0.5;
+		
+		if (files.length == 0 || files[0].type !== 'image/png') {
+			console.warn('Wrong file');
+			return;
+		}
 
-			const files = event.dataTransfer.files;
-			const dropX = event.x - this.width * 0.5;
-			const dropY = event.y - this.height * 0.5;
-			
-			if (files.length == 0 || files[0].type !== 'image/png') {
-				console.warn('Wrong file');
+		const file = files[0];
+		const reader = new FileReader();
+
+		reader.addEventListener('load', (event) => {
+			const src =  event.target.result;
+
+			if (this.loadedImages.has(src)) {
+				// Image is already in loaded
+				this.add(new EditorImageObject(this.loadedImages.get(src), dropX, dropY));
 				return;
 			}
 
-			const file = files[0];
-			const reader = new FileReader();
+			if (this.loadingImages.has(src)) {
+				// Image is already in loading
+				this.add(new EditorImageObject(this.loadingImages.get(src), dropX, dropY));
+				return;
+			}
 
-			reader.addEventListener('load', (event) => {
-				const src =  event.target.result;
+			const img = new Image();
 
-				if (this.loadedImages.has(src)) {
-					// Image is already in loaded
-					this.add(new EditorImageObject(this.loadedImages.get(src), dropX, dropY));
-					return;
-				}
-
-				if (this.loadingImages.has(src)) {
-					// Image is already in loading
-					this.add(new EditorImageObject(this.loadingImages.get(src), dropX, dropY));
-					return;
-				}
-
-				const img = new Image();
-
-				img.addEventListener('load', () => {
-					this.loadingImages.delete(src);
-					this.loadedImages.set(src, img);
-					this.add(new EditorImageObject(img, dropX, dropY));
-				});
-
-				this.loadingImages.set(src, img);
-
-				img.src = src;
+			img.addEventListener('load', () => {
+				this.loadingImages.delete(src);
+				this.loadedImages.set(src, img);
+				this.add(new EditorImageObject(img, dropX, dropY));
 			});
 
-			reader.readAsDataURL(file);
+			this.loadingImages.set(src, img);
+
+			img.src = src;
 		});
+
+		reader.readAsDataURL(file);
 	}
 
 	#mousedown (event) {
