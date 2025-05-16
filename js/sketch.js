@@ -1,16 +1,9 @@
 import { Editor } from "./editor.js";
 import { EditorImageObject } from "./editor.object.js";
-import _tImage from "./init-image-tmp.js";
 
 const ctx = canvas.getContext('2d');
 const editor = new Editor(canvas);
 let animationFrame = null;
-
-editor.add(new EditorImageObject(_tImage, 0, 0));
-editor.add(new EditorImageObject(_tImage, 200, 0));
-editor.add(new EditorImageObject(_tImage, 200, 200));
-editor.add(new EditorImageObject(_tImage, 0, -200));
-editor.add(new EditorImageObject(_tImage, -200, -200));
 
 console.log(editor);
 

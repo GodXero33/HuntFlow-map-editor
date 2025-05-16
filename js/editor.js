@@ -1,5 +1,7 @@
 import { EditorImageObject, EditorObject } from "./editor.object.js";
 import { drawDashedRect, drawSelectRect } from "./util.js";
+import _tImage from "./init-image-tmp.js";
+import { TreeHistoryManager } from 'https://cdn.jsdelivr.net/gh/GodXero33/UndoRedoExperiments@main/history-manager.js';
 
 let EDITOR_SETTINGS = null;
 
@@ -32,10 +34,37 @@ class Editor {
 				action: () => {
 					this.#deleteSelected();
 				}
+			},
+			{
+				name: 'undo',
+				binds: ['control+z'],
+				action: () => {
+					this.#loadHistoryFromData(this.historyManager.undo());
+				}
+			},
+			{
+				name: 'redo',
+				binds: ['control+y', 'control+shift+z'],
+				action: () => {
+					this.#loadHistoryFromData(this.historyManager.redo());
+				}
 			}
 		];
 
+		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
+
 		this.#initEvents();
+		this.addDummies();
+	}
+
+	addDummies () {
+		this.add(new EditorImageObject(_tImage, 0, 0));
+		this.add(new EditorImageObject(_tImage, 200, 0));
+		this.add(new EditorImageObject(_tImage, 200, 200));
+		this.add(new EditorImageObject(_tImage, 0, -200));
+		this.add(new EditorImageObject(_tImage, -200, -200));
+
+		this.#updateHistory();
 	}
 
 	#initEvents () {
@@ -263,6 +292,22 @@ class Editor {
 
 		this.selectedObjects.length = 0;
 		this.selectBoundingRect = null;
+
+		this.#updateHistory();
+	}
+
+	#getDataForHistory () {
+		return {
+			objects: this.objects.map(object => object)
+		};
+	}
+
+	#loadHistoryFromData (data) {
+		this.objects = data.objects;
+	}
+
+	#updateHistory () {
+		this.historyManager.change(this.#getDataForHistory());
 	}
 
 	draw (ctx) {
