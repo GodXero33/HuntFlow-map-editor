@@ -25,6 +25,13 @@ class Editor {
 		this.hoveredObject = null;
 		this.mousedownObject = null;
 
+		this.panStartPoint = null;
+
+		this.minZoomFact = 0.1;
+		this.maxZoomFact = 5;
+		this.editBlockZoomFact = 0.6;
+		this.prevZoom = 1;
+
 		this.downKeys = new Set();
 		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
 
@@ -33,6 +40,8 @@ class Editor {
 			y: 0,
 			scale: 1
 		};
+
+		this.previousCursor = 'default';
 
 		this.#defineKeyBinds();
 		this.#initEvents();
@@ -84,6 +93,7 @@ class Editor {
 		this.canvas.addEventListener('contextmenu', event => event.preventDefault());
 		this.canvas.addEventListener('dragover', event => event.preventDefault());
 		this.canvas.addEventListener('drop', this.#dropAction.bind(this));
+		this.canvas.addEventListener('wheel', this.#wheel.bind(this));
 		window.addEventListener('blur', () => this.downKeys.clear());
 	}
 
@@ -143,16 +153,38 @@ class Editor {
 
 	#mousedown (event) {
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
-		this.mousedownObject = this.#getObjectOnMouse(x, y);
+
+		if (event.button === 0 && this.transform.scale > this.editBlockZoomFact) {
+			this.mousedownObject = this.#getObjectOnMouse(x, y);
+			return;
+		}
+
+		if (event.button === 2) {
+			this.panStartPoint = { x: event.x, y: event.y };
+		}
 	}
 
 	#mousemove (event) {
+		if (this.prevZoom === this.transform.scale) {
+			console.log(true); // try to make zoom on point where mouse is
+		}
+		if (this.panStartPoint) {
+			this.transform.x += event.x - this.panStartPoint.x;
+			this.transform.y += event.y - this.panStartPoint.y;
+			this.panStartPoint.x = event.x;
+			this.panStartPoint.y = event.y;
+
+			return;
+		}
+
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
 
-		if (this.hoveredObject) {
+		if (this.transform.scale < this.editBlockZoomFact) {
+			this.#updateCursor('not-allowed');
+		} else if (this.hoveredObject) {
 			this.#updateCursor('pointer');
 		} else if (this.#isMouseInSelectBoundingRect(x, y)) {
 			this.#updateCursor('move');
@@ -162,6 +194,13 @@ class Editor {
 	}
 
 	#mouseup (event) {
+		if (event.button === 2) {
+			this.panStartPoint = null;
+			return;
+		}
+
+		if (this.transform.scale < this.editBlockZoomFact) return;
+
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		const mouseupObject = this.#getObjectOnMouse(x, y);
 
@@ -179,6 +218,19 @@ class Editor {
 				this.#updateCursor('pointer');
 			}
 		}
+	}
+
+	#wheel (event) {
+		let fact = this.transform.scale * (1 + Math.sign(event.deltaY) * 0.1);
+
+		if (fact > this.maxZoomFact) fact = this.maxZoomFact;
+		if (fact < this.minZoomFact) fact = this.minZoomFact;
+
+		this.prevZoom = this.transform.scale;
+		this.transform.scale = fact;
+		this.hoveredObject = null;
+
+		this.#updateCursor(fact < this.editBlockZoomFact ? 'not-allowed' : 'default');
 	}
 
 	#splitKeyBind (bind) {
@@ -292,6 +344,9 @@ class Editor {
 	}
 
 	#updateCursor (cursor) {
+		if (this.previousCursor === cursor) return;
+
+		this.previousCursor = cursor;
 		this.canvas.style.cursor = cursor;
 	}
 
