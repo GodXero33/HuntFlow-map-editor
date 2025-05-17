@@ -10,6 +10,10 @@ class EditorObject {
 	draw (ctx) {}
 
 	update () {}
+
+	clone () {
+		return null;
+	}
 }
 
 class EditorImageObject extends EditorObject {
@@ -22,6 +26,10 @@ class EditorImageObject extends EditorObject {
 
 	draw (ctx) {
 		ctx.drawImage(this.img, this.x, this.y, this.w, this.h);
+	}
+
+	clone () {
+		return new EditorImageObject(this.img, this.x, this.y, this.w, this.h, this.r);
 	}
 }
 

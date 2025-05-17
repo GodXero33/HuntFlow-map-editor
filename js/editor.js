@@ -1,5 +1,5 @@
 import { EditorImageObject, EditorObject } from "./editor.object.js";
-import { drawDashedRect, drawSelectRect } from "./util.js";
+import { drawDashedRect, drawSelectRect, isPointInRect, isTwoRectsIntersectOrOneUnion } from "./util.js";
 import _tImage from "./init-image-tmp.js";
 import { TreeHistoryManager } from 'https://cdn.jsdelivr.net/gh/GodXero33/UndoRedoExperiments@main/history-manager.js';
 
@@ -26,14 +26,18 @@ class Editor {
 		this.mousedownObject = null;
 
 		this.panStartPoint = null;
+		this.dragStartPoint = null;
+		this.dragStartOriginalPoint = null;
+		this.selectionStartPoint = null;
+		this.selectionRect = null;
 
 		this.minZoomFact = 0.1;
 		this.maxZoomFact = 5;
-		this.editBlockZoomFact = 0.6;
 		this.prevZoom = 1;
+		this.zoomIntensity = 0.05;
 
 		this.downKeys = new Set();
-		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
+		this.historyManager = new TreeHistoryManager({});
 
 		this.transform = {
 			x: 0,
@@ -52,7 +56,7 @@ class Editor {
 		this.keyBinds = [
 			{
 				name: 'delete',
-				binds: ['shift+x', 'delete'],
+				binds: ['x', 'delete'],
 				action: () => {
 					this.#deleteSelected();
 				}
@@ -61,14 +65,22 @@ class Editor {
 				name: 'undo',
 				binds: ['control+z'],
 				action: () => {
-					this.#loadHistoryFromData(this.historyManager.undo());
+					// this.#loadHistoryFromData(this.historyManager.undo());
 				}
 			},
 			{
 				name: 'redo',
 				binds: ['control+y', 'control+shift+z'],
 				action: () => {
-					this.#loadHistoryFromData(this.historyManager.redo());
+					// this.#loadHistoryFromData(this.historyManager.redo());
+				}
+			},
+			{
+				name: 'select-all',
+				binds: ['control+a', 'a'],
+				action: () => {
+					this.selectedObjects = this.selectedObjects.length === this.objects.length ? [] : this.objects.map(object => object);
+					this.#updateSelectBoundingRect();
 				}
 			}
 		];
@@ -80,8 +92,6 @@ class Editor {
 		this.add(new EditorImageObject(_tImage, 200, 200));
 		this.add(new EditorImageObject(_tImage, 0, -200));
 		this.add(new EditorImageObject(_tImage, -200, -200));
-
-		this.#updateHistory();
 	}
 
 	#initEvents () {
@@ -154,20 +164,25 @@ class Editor {
 	#mousedown (event) {
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 
-		if (event.button === 0 && this.transform.scale > this.editBlockZoomFact) {
-			this.mousedownObject = this.#getObjectOnMouse(x, y);
+		if (event.button === 2 || (this.downKeys.has('alt') && event.button === 0)) {
+			this.panStartPoint = { x: event.x, y: event.y };
 			return;
 		}
 
-		if (event.button === 2) {
-			this.panStartPoint = { x: event.x, y: event.y };
+		if (event.button === 0) {
+			this.mousedownObject = this.#getObjectOnMouse(x, y);
+
+			if (this.selectBoundingRect && isPointInRect(this.selectBoundingRect, x, y)) {
+				this.dragStartPoint = { x: event.x, y: event.y };
+				this.dragStartOriginalPoint = { x: event.x, y: event.y };
+				return;
+			}
+
+			if (!this.mousedownObject) this.selectionStartPoint = { x, y };
 		}
 	}
 
 	#mousemove (event) {
-		if (this.prevZoom === this.transform.scale) {
-			console.log(true); // try to make zoom on point where mouse is
-		}
 		if (this.panStartPoint) {
 			this.transform.x += event.x - this.panStartPoint.x;
 			this.transform.y += event.y - this.panStartPoint.y;
@@ -177,14 +192,50 @@ class Editor {
 			return;
 		}
 
+		if (this.dragStartPoint) {
+			let dx = (event.x - this.dragStartPoint.x) / this.transform.scale;
+			let dy = (event.y - this.dragStartPoint.y) / this.transform.scale;
+
+			this.dragStartPoint.x = event.x;
+			this.dragStartPoint.y = event.y;
+
+			this.selectedObjects.forEach(object => {
+				object.x += dx;
+				object.y += dy;
+			});
+
+			this.#updateSelectBoundingRect();
+			return;
+		}
+
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
+
+		if (this.selectionStartPoint) {
+			this.selectionRect = {
+				...this.selectionStartPoint,
+				w: x - this.selectionStartPoint.x,
+				h: y - this.selectionStartPoint.y
+			};
+			const isShiftDown = this.downKeys.size == 1 && (this.downKeys.has('shift') || this.downKeys.has('control'));
+			const currentSelectedObjects = this.objects.filter(object => isTwoRectsIntersectOrOneUnion(object, this.selectionRect));
+
+			if (isShiftDown) {
+				currentSelectedObjects.forEach(object => {
+					if (!this.selectedObjects.includes(object)) this.selectedObjects.push(object);
+				});
+			} else {
+				this.selectedObjects = currentSelectedObjects
+			}
+
+			this.#updateCursor('crosshair');
+			return;
+		}
+
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
 
-		if (this.transform.scale < this.editBlockZoomFact) {
-			this.#updateCursor('not-allowed');
-		} else if (this.hoveredObject) {
+		if (this.hoveredObject) {
 			this.#updateCursor('pointer');
 		} else if (this.#isMouseInSelectBoundingRect(x, y)) {
 			this.#updateCursor('move');
@@ -194,17 +245,16 @@ class Editor {
 	}
 
 	#mouseup (event) {
-		if (event.button === 2) {
+		if (event.button === 2 || (this.downKeys.has('alt') && event.button === 0)) {
 			this.panStartPoint = null;
 			return;
 		}
 
-		if (this.transform.scale < this.editBlockZoomFact) return;
-
+		const dragged = this.dragStartPoint !== null && (this.dragStartOriginalPoint.x !== this.dragStartPoint.x || this.dragStartOriginalPoint.y !== this.dragStartPoint.y);
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		const mouseupObject = this.#getObjectOnMouse(x, y);
 
-		if (this.mousedownObject && this.mousedownObject === mouseupObject) {
+		if (!dragged && this.mousedownObject && this.mousedownObject === mouseupObject) {
 			this.#updateSelectedObjects(mouseupObject);
 
 			this.mousedownObject = null;
@@ -218,19 +268,29 @@ class Editor {
 				this.#updateCursor('pointer');
 			}
 		}
+
+		if (this.selectionRect) {
+			this.#updateCursor('default');
+			this.#updateSelectBoundingRect();
+		}
+
+		this.dragStartPoint = null;
+		this.selectionStartPoint = null;
+		this.selectionRect = null;
 	}
 
 	#wheel (event) {
-		let fact = this.transform.scale * (1 + Math.sign(event.deltaY) * 0.1);
+		event.preventDefault();
 
-		if (fact > this.maxZoomFact) fact = this.maxZoomFact;
-		if (fact < this.minZoomFact) fact = this.minZoomFact;
+		const { x: worldX, y: worldY } = this.#getMouseRelativePoint(event.x, event.y);
+		const newScale = Math.min(this.maxZoomFact, Math.max(this.minZoomFact, this.transform.scale * (1 + Math.sign(event.deltaY) * this.zoomIntensity)));
+		const scaleFactor = newScale / this.transform.scale;
 
-		this.prevZoom = this.transform.scale;
-		this.transform.scale = fact;
+		this.transform.x -= (worldX * (scaleFactor - 1)) * this.transform.scale;
+		this.transform.y -= (worldY * (scaleFactor - 1)) * this.transform.scale;
+		this.transform.scale = newScale;
+
 		this.hoveredObject = null;
-
-		this.#updateCursor(fact < this.editBlockZoomFact ? 'not-allowed' : 'default');
 	}
 
 	#splitKeyBind (bind) {
@@ -279,6 +339,8 @@ class Editor {
 				return true;
 			})) bindObject.action();
 		});
+
+		this.#checkSelectedObjectsKeyMove();
 	}
 
 	#keyup (event) {
@@ -286,20 +348,13 @@ class Editor {
 	}
 
 	#isMouseInSelectBoundingRect (x, y) {
-		return this.selectBoundingRect && this.isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale)
+		return this.selectBoundingRect && isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale)
 	}
 
 	#getObjectOnMouse (x, y) {
 		const offset = EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale;
 
-		return this.objects.find(object => this.isPointInRect(object, x, y, offset));
-	}
-
-	isPointInRect (rect, x, y, offset = 0) {
-		return x > rect.x - offset &&
-			x < rect.x + rect.w + offset &&
-			y > rect.y - offset &&
-			y < rect.y + rect.h + offset;
+		return this.objects.find(object => isPointInRect(object, x, y, offset));
 	}
 
 	#updateSelectedObjects (object) {
@@ -357,22 +412,35 @@ class Editor {
 
 		this.selectedObjects.length = 0;
 		this.selectBoundingRect = null;
-
-		this.#updateHistory();
 	}
 
-	#getDataForHistory () {
-		return {
-			objects: this.objects.map(object => object)
-		};
+	#moveSelectedObjectsByOne (dirX, dirY) {
+		this.selectedObjects.forEach(object => {
+			object.x += dirX;
+			object.y += dirY;
+		});
 	}
 
-	#loadHistoryFromData (data) {
-		this.objects = data.objects;
+	#checkSelectedObjectsKeyMove () {
+		if (!this.selectBoundingRect) return;
+
+		if (this.downKeys.has('arrowup')) {
+			this.#moveSelectedObjectsByOne(0, -1);
+			this.#updateSelectBoundingRect();
+		} else if (this.downKeys.has('arrowdown')) {
+			this.#moveSelectedObjectsByOne(0, 1);
+			this.#updateSelectBoundingRect();
+		} else if (this.downKeys.has('arrowleft')) {
+			this.#moveSelectedObjectsByOne(-1, 0);
+			this.#updateSelectBoundingRect();
+		} else if (this.downKeys.has('arrowright')) {
+			this.#moveSelectedObjectsByOne(1, 0);
+			this.#updateSelectBoundingRect();
+		}
 	}
 
-	#updateHistory () {
-		this.historyManager.change(this.#getDataForHistory());
+	#updateHistory (historyObject) {
+		this.historyManager.change(historyObject);
 	}
 
 	draw (ctx) {
@@ -384,16 +452,25 @@ class Editor {
 
 		ctx.translate(this.width * 0.5, this.height * 0.5);
 		ctx.translate(this.transform.x, this.transform.y);
+
 		ctx.scale(this.transform.scale, this.transform.scale);
 
 		this.objects.forEach(object => object.draw(ctx));
 
 		if (this.hoveredObject) this.#drawHoveredObject(ctx);
+		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale);
 
-		if (this.selectBoundingRect) {
-			drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select);
+		this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale));
 
-			if (this.selectedObjects.length != 1) this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select));
+		if (this.selectionRect) {
+			ctx.strokeStyle = '#f0f';
+			ctx.fillStyle = '#f0f2';
+			ctx.lineWidth = 2 / this.transform.scale;
+
+			ctx.beginPath();
+			ctx.rect(this.selectionRect.x, this.selectionRect.y, this.selectionRect.w, this.selectionRect.h);
+			ctx.fill();
+			ctx.stroke();
 		}
 
 		ctx.setTransform(transform);
@@ -406,7 +483,7 @@ class Editor {
 
 		ctx.globalAlpha = 1;
 
-		drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover);
+		drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale);
 	}
 
 	update () {}
