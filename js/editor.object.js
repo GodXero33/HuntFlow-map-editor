@@ -14,6 +14,8 @@ class EditorObject {
 	clone () {
 		return null;
 	}
+
+	scale () {}
 }
 
 class EditorImageObject extends EditorObject {
@@ -30,6 +32,14 @@ class EditorImageObject extends EditorObject {
 
 	clone () {
 		return new EditorImageObject(this.img, this.x, this.y, this.w, this.h, this.r);
+	}
+
+	scale (x, y) {
+		this.w += x;
+		this.h += y;
+
+		if (this.w < 0) this.w = 0;
+		if (this.h < 0) this.h = 0;
 	}
 }
 
