@@ -46,6 +46,7 @@ class Editor {
 		};
 
 		this.previousCursor = 'default';
+		this.clipboardImagePlaceOffset = 0;
 
 		this.#defineKeyBinds();
 		this.#initEvents();
@@ -82,6 +83,20 @@ class Editor {
 					this.selectedObjects = this.selectedObjects.length === this.objects.length ? [] : this.objects.map(object => object);
 					this.#updateSelectBoundingRect();
 				}
+			},
+			{
+				name: 'copy-clipboard',
+				binds: ['control+v'],
+				action: () => {
+					this.#copyFromClipboard();
+				}
+			},
+			{
+				name: 'copy-clipboard',
+				binds: ['control+c'],
+				action: () => {
+					//
+				}
 			}
 		];
 	}
@@ -112,6 +127,49 @@ class Editor {
 			x: (x - this.transform.x - this.width * 0.5) / this.transform.scale,
 			y: (y - this.transform.y - this.height * 0.5) / this.transform.scale
 		};
+	}
+
+	async #copyFromClipboard () {
+		const clipboardItems = await navigator.clipboard.read();
+
+		for (const item of clipboardItems) {
+			if (!item.types.includes('image/png')) continue;
+
+			const blob = await item.getType('image/png');
+			const reader = new FileReader();
+
+			reader.onload = (event) => {
+				const src = event.target.result;
+				const imgX = -this.transform.x / this.transform.scale + this.clipboardImagePlaceOffset;
+				const imgY = -this.transform.y / this.transform.scale + this.clipboardImagePlaceOffset;
+
+				this.clipboardImagePlaceOffset = (this.clipboardImagePlaceOffset + 20) % 100;
+
+				if (this.loadedImages.has(src)) {
+					this.add(new EditorImageObject(this.loadedImages.get(src), imgX, imgY));
+					return;
+				}
+
+				if (this.loadingImages.has(src)) {
+					this.add(new EditorImageObject(this.loadingImages.get(src), imgX, imgY));
+					return;
+				}
+
+				const img = new Image();
+
+				img.onload = () => {
+					this.loadingImages.delete(src);
+					this.loadedImages.set(src, img);
+					this.add(new EditorImageObject(img, imgX, imgY));
+				};
+
+				this.loadingImages.set(src, img);
+				img.src = src;
+			};
+
+			reader.readAsDataURL(blob);
+			break;
+		}
 	}
 
 	#dropAction (event) {
@@ -485,8 +543,6 @@ class Editor {
 
 		drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale);
 	}
-
-	update () {}
 
 	add (object) {
 		if (!(object instanceof EditorObject)) return;
