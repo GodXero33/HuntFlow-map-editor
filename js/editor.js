@@ -77,7 +77,7 @@ class Editor {
 				name: 'select-all',
 				binds: ['control+a', 'a'],
 				action: () => {
-					this.selectedObjects = this.objects.map(object => object);
+					this.selectedObjects = this.selectedObjects.length === this.objects.length ? [] : this.objects.map(object => object);
 					this.#updateSelectBoundingRect();
 				}
 			}
