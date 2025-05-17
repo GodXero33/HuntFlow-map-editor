@@ -1,5 +1,5 @@
 import { EditorImageObject, EditorObject } from "./editor.object.js";
-import { drawDashedRect, drawSelectRect } from "./util.js";
+import { drawDashedRect, drawSelectRect, isPointInRect } from "./util.js";
 import _tImage from "./init-image-tmp.js";
 import { TreeHistoryManager } from 'https://cdn.jsdelivr.net/gh/GodXero33/UndoRedoExperiments@main/history-manager.js';
 
@@ -26,6 +26,7 @@ class Editor {
 		this.mousedownObject = null;
 
 		this.panStartPoint = null;
+		this.dragStartPoint = null;
 
 		this.minZoomFact = 0.1;
 		this.maxZoomFact = 5;
@@ -158,6 +159,11 @@ class Editor {
 		}
 
 		if (event.button === 0) {
+			if (this.selectBoundingRect && isPointInRect(this.selectBoundingRect, x, y)) {
+				this.dragStartPoint = { x: event.x, y: event.y };
+				return;
+			}
+
 			this.mousedownObject = this.#getObjectOnMouse(x, y);
 		}
 	}
@@ -169,6 +175,22 @@ class Editor {
 			this.panStartPoint.x = event.x;
 			this.panStartPoint.y = event.y;
 
+			return;
+		}
+
+		if (this.dragStartPoint) {
+			let dx = (event.x - this.dragStartPoint.x) / this.transform.scale;
+			let dy = (event.y - this.dragStartPoint.y) / this.transform.scale;
+
+			this.dragStartPoint.x = event.x;
+			this.dragStartPoint.y = event.y;
+
+			this.selectedObjects.forEach(object => {
+				object.x += dx;
+				object.y += dy;
+			});
+
+			this.#updateSelectBoundingRect();
 			return;
 		}
 
@@ -191,6 +213,8 @@ class Editor {
 			this.panStartPoint = null;
 			return;
 		}
+
+		this.dragStartPoint = null;
 
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		const mouseupObject = this.#getObjectOnMouse(x, y);
@@ -271,6 +295,8 @@ class Editor {
 				return true;
 			})) bindObject.action();
 		});
+
+		this.#checkSelectedObjectsKeyMove();
 	}
 
 	#keyup (event) {
@@ -278,20 +304,13 @@ class Editor {
 	}
 
 	#isMouseInSelectBoundingRect (x, y) {
-		return this.selectBoundingRect && this.isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale)
+		return this.selectBoundingRect && isPointInRect(this.selectBoundingRect, x, y, EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale)
 	}
 
 	#getObjectOnMouse (x, y) {
 		const offset = EDITOR_SETTINGS.selector_dots_size * 0.5 * this.transform.scale;
 
-		return this.objects.find(object => this.isPointInRect(object, x, y, offset));
-	}
-
-	isPointInRect (rect, x, y, offset = 0) {
-		return x > rect.x - offset &&
-			x < rect.x + rect.w + offset &&
-			y > rect.y - offset &&
-			y < rect.y + rect.h + offset;
+		return this.objects.find(object => isPointInRect(object, x, y, offset));
 	}
 
 	#updateSelectedObjects (object) {
@@ -349,6 +368,31 @@ class Editor {
 
 		this.selectedObjects.length = 0;
 		this.selectBoundingRect = null;
+	}
+
+	#moveSelectedObjectsByOne (dirX, dirY) {
+		this.selectedObjects.forEach(object => {
+			object.x += dirX;
+			object.y += dirY;
+		});
+	}
+
+	#checkSelectedObjectsKeyMove () {
+		if (!this.selectBoundingRect) return;
+
+		if (this.downKeys.has('arrowup')) {
+			this.#moveSelectedObjectsByOne(0, -1);
+			this.#updateSelectBoundingRect();
+		} else if (this.downKeys.has('arrowdown')) {
+			this.#moveSelectedObjectsByOne(0, 1);
+			this.#updateSelectBoundingRect();
+		} else if (this.downKeys.has('arrowleft')) {
+			this.#moveSelectedObjectsByOne(-1, 0);
+			this.#updateSelectBoundingRect();
+		} else if (this.downKeys.has('arrowright')) {
+			this.#moveSelectedObjectsByOne(1, 0);
+			this.#updateSelectBoundingRect();
+		}
 	}
 
 	#updateHistory (historyObject) {

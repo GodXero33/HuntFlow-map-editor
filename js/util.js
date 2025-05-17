@@ -54,6 +54,13 @@ rect
 	ctx.stroke();
 }
 
+function isPointInRect (rect, x, y, offset = 0) {
+	return x > rect.x - offset &&
+		x < rect.x + rect.w + offset &&
+		y > rect.y - offset &&
+		y < rect.y + rect.h + offset;
+}
+
 function injectEditorSettingsRefForUtil (editorSettingsRef) {
 	EDITOR_SETTINGS = editorSettingsRef;
 }
@@ -61,5 +68,6 @@ function injectEditorSettingsRefForUtil (editorSettingsRef) {
 export {
 	injectEditorSettingsRefForUtil,
 	drawSelectRect,
-	drawDashedRect
+	drawDashedRect,
+	isPointInRect
 };
