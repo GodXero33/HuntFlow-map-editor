@@ -1,5 +1,5 @@
 import { EditorImageObject, EditorObject } from "./editor.object.js";
-import { drawDashedRect, drawSelectRect, isPointInRect } from "./util.js";
+import { drawDashedRect, drawSelectRect, isPointInRect, isTwoRectsIntersectOrOneUnion } from "./util.js";
 import _tImage from "./init-image-tmp.js";
 import { TreeHistoryManager } from 'https://cdn.jsdelivr.net/gh/GodXero33/UndoRedoExperiments@main/history-manager.js';
 
@@ -28,6 +28,8 @@ class Editor {
 		this.panStartPoint = null;
 		this.dragStartPoint = null;
 		this.dragStartOriginalPoint = null;
+		this.selectionStartPoint = null;
+		this.selectionRect = null;
 
 		this.minZoomFact = 0.1;
 		this.maxZoomFact = 5;
@@ -175,6 +177,8 @@ class Editor {
 				this.dragStartOriginalPoint = { x: event.x, y: event.y };
 				return;
 			}
+
+			if (!this.mousedownObject) this.selectionStartPoint = { x, y };
 		}
 	}
 
@@ -205,6 +209,28 @@ class Editor {
 		}
 
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
+
+		if (this.selectionStartPoint) {
+			this.selectionRect = {
+				...this.selectionStartPoint,
+				w: x - this.selectionStartPoint.x,
+				h: y - this.selectionStartPoint.y
+			};
+			const isShiftDown = this.downKeys.size == 1 && (this.downKeys.has('shift') || this.downKeys.has('control'));
+			const currentSelectedObjects = this.objects.filter(object => isTwoRectsIntersectOrOneUnion(object, this.selectionRect));
+
+			if (isShiftDown) {
+				currentSelectedObjects.forEach(object => {
+					if (!this.selectedObjects.includes(object)) this.selectedObjects.push(object);
+				});
+			} else {
+				this.selectedObjects = currentSelectedObjects
+			}
+
+			this.#updateCursor('crosshair');
+			return;
+		}
+
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
@@ -243,7 +269,14 @@ class Editor {
 			}
 		}
 
+		if (this.selectionRect) {
+			this.#updateCursor('default');
+			this.#updateSelectBoundingRect();
+		}
+
 		this.dragStartPoint = null;
+		this.selectionStartPoint = null;
+		this.selectionRect = null;
 	}
 
 	#wheel (event) {
@@ -425,11 +458,19 @@ class Editor {
 		this.objects.forEach(object => object.draw(ctx));
 
 		if (this.hoveredObject) this.#drawHoveredObject(ctx);
+		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale);
 
-		if (this.selectBoundingRect) {
-			drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale);
+		this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale));
 
-			if (this.selectedObjects.length != 1) this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale));
+		if (this.selectionRect) {
+			ctx.strokeStyle = '#f0f';
+			ctx.fillStyle = '#f0f2';
+			ctx.lineWidth = 2 / this.transform.scale;
+
+			ctx.beginPath();
+			ctx.rect(this.selectionRect.x, this.selectionRect.y, this.selectionRect.w, this.selectionRect.h);
+			ctx.fill();
+			ctx.stroke();
 		}
 
 		ctx.setTransform(transform);
