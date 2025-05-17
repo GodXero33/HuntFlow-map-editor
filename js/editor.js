@@ -47,6 +47,7 @@ class Editor {
 
 		this.previousCursor = 'default';
 		this.clipboardImagePlaceOffset = 0;
+		this.localClipboard = null;
 
 		this.#defineKeyBinds();
 		this.#initEvents();
@@ -57,7 +58,14 @@ class Editor {
 		this.keyBinds = [
 			{
 				name: 'delete',
-				binds: ['x', 'delete'],
+				binds: ['delete'],
+				action: () => {
+					this.#deleteSelected();
+				}
+			},
+			{
+				name: 'x',
+				binds: ['x'],
 				action: () => {
 					this.#deleteSelected();
 				}
@@ -85,17 +93,35 @@ class Editor {
 				}
 			},
 			{
-				name: 'copy-clipboard',
+				name: 'paste-clipboard',
 				binds: ['control+v'],
 				action: () => {
-					this.#copyFromClipboard();
+					this.#pasteClipboard();
 				}
 			},
 			{
-				name: 'copy-clipboard',
-				binds: ['control+c'],
+				name: 'paste-local-clipboard',
+				binds: ['v'],
 				action: () => {
-					//
+					if (!this.localClipboard) return;
+
+					this.selectedObjects.length = 0;
+
+					this.localClipboard.forEach(object => {
+						const clone = object.clone();
+
+						this.objects.push(clone);
+						this.selectedObjects.push(clone);
+					});
+
+					this.#updateSelectBoundingRect();
+				}
+			},
+			{
+				name: 'copy-local-clipboard',
+				binds: ['c'],
+				action: () => {
+					this.localClipboard = this.selectedObjects.map(object => object.clone());
 				}
 			}
 		];
@@ -129,7 +155,7 @@ class Editor {
 		};
 	}
 
-	async #copyFromClipboard () {
+	async #pasteClipboard () {
 		const clipboardItems = await navigator.clipboard.read();
 
 		for (const item of clipboardItems) {
