@@ -37,9 +37,6 @@ class EditorImageObject extends EditorObject {
 	scale (x, y) {
 		this.w += x;
 		this.h += y;
-
-		if (this.w < 0) this.w = 0;
-		if (this.h < 0) this.h = 0;
 	}
 }
 

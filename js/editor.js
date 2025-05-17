@@ -324,20 +324,20 @@ class Editor {
 				w: x - this.selectionStartPoint.x,
 				h: y - this.selectionStartPoint.y
 			};
-			const fixedSelectRect = { ...this.selectionRect };
+			const dimensionFixedSelectRect = { ...this.selectionRect }; // new selectionRect for make selectionRect always start from top-left corner to bottom-right corner. no negative width or height
 
-			if (fixedSelectRect.w < 0) {
-				fixedSelectRect.x += fixedSelectRect.w;
-				fixedSelectRect.w *= -1;
+			if (dimensionFixedSelectRect.w < 0) {
+				dimensionFixedSelectRect.x += dimensionFixedSelectRect.w;
+				dimensionFixedSelectRect.w *= -1;
 			}
 
-			if (fixedSelectRect.h < 0) {
-				fixedSelectRect.y += fixedSelectRect.h;
-				fixedSelectRect.h *= -1;
+			if (dimensionFixedSelectRect.h < 0) {
+				dimensionFixedSelectRect.y += dimensionFixedSelectRect.h;
+				dimensionFixedSelectRect.h *= -1;
 			}
 
 			const isShiftDown = this.downKeys.size == 1 && (this.downKeys.has('shift') || this.downKeys.has('control'));
-			const currentSelectedObjects = this.objects.filter(object => isTwoRectsIntersectOrOneUnion(object, fixedSelectRect));
+			const currentSelectedObjects = this.objects.filter(object => isTwoRectsIntersectOrOneUnion(object, dimensionFixedSelectRect));
 
 			if (isShiftDown) {
 				currentSelectedObjects.forEach(object => {
