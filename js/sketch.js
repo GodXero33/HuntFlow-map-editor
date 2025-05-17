@@ -9,7 +9,6 @@ console.log(editor);
 
 function animate () {
 	editor.draw(ctx);
-	editor.update();
 
 	animationFrame = requestAnimationFrame(animate);
 }
