@@ -324,8 +324,20 @@ class Editor {
 				w: x - this.selectionStartPoint.x,
 				h: y - this.selectionStartPoint.y
 			};
+			const fixedSelectRect = { ...this.selectionRect };
+
+			if (fixedSelectRect.w < 0) {
+				fixedSelectRect.x += fixedSelectRect.w;
+				fixedSelectRect.w *= -1;
+			}
+
+			if (fixedSelectRect.h < 0) {
+				fixedSelectRect.y += fixedSelectRect.h;
+				fixedSelectRect.h *= -1;
+			}
+
 			const isShiftDown = this.downKeys.size == 1 && (this.downKeys.has('shift') || this.downKeys.has('control'));
-			const currentSelectedObjects = this.objects.filter(object => isTwoRectsIntersectOrOneUnion(object, this.selectionRect));
+			const currentSelectedObjects = this.objects.filter(object => isTwoRectsIntersectOrOneUnion(object, fixedSelectRect));
 
 			if (isShiftDown) {
 				currentSelectedObjects.forEach(object => {
