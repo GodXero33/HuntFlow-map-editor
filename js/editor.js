@@ -46,6 +46,8 @@ class Editor {
 		};
 
 		this.previousCursor = 'default';
+		this.selectedObjectScaleStatus = null;
+
 		this.clipboardImagePlaceOffset = 0;
 		this.localClipboard = null;
 
@@ -254,6 +256,16 @@ class Editor {
 		}
 
 		if (event.button === 0) {
+			if (this.selectedObjects.length !== 0) {
+				let selectedObjectScale = this.#getSelectedObjectScaleStatus(x, y);
+
+				if (selectedObjectScale) {
+					this.#updateCursor(selectedObjectScale == 1 ? 'ew-resize' : 'ns-resize');
+					this.selectedObjectScaleStatus = { x, y };
+					return;
+				}
+			}
+
 			this.mousedownObject = this.#getObjectOnMouse(x, y);
 
 			if (this.selectBoundingRect && isPointInRect(this.selectBoundingRect, x, y)) {
@@ -267,6 +279,20 @@ class Editor {
 	}
 
 	#mousemove (event) {
+		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
+
+		if (this.selectedObjectScaleStatus) {
+			const dx = x - this.selectedObjectScaleStatus.x;
+			const dy = y - this.selectedObjectScaleStatus.y;
+			this.selectedObjectScaleStatus.x = x;
+			this.selectedObjectScaleStatus.y = y;
+
+			this.selectedObjects.forEach(object => object.scale(dx, dy));
+			this.#updateSelectBoundingRect();
+
+			return;
+		}
+
 		if (this.panStartPoint) {
 			this.transform.x += event.x - this.panStartPoint.x;
 			this.transform.y += event.y - this.panStartPoint.y;
@@ -292,8 +318,6 @@ class Editor {
 			return;
 		}
 
-		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
-
 		if (this.selectionStartPoint) {
 			this.selectionRect = {
 				...this.selectionStartPoint,
@@ -318,6 +342,15 @@ class Editor {
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
+
+		if (this.selectedObjects.length !== 0) {
+			let selectedObjectScale = this.#getSelectedObjectScaleStatus(x, y);
+
+			if (selectedObjectScale) {
+				this.#updateCursor(selectedObjectScale == 1 ? 'ew-resize' : 'ns-resize');
+				return;
+			}
+		}
 
 		if (this.hoveredObject) {
 			this.#updateCursor('pointer');
@@ -361,6 +394,7 @@ class Editor {
 		this.dragStartPoint = null;
 		this.selectionStartPoint = null;
 		this.selectionRect = null;
+		this.selectedObjectScaleStatus = null;
 	}
 
 	#wheel (event) {
@@ -375,6 +409,28 @@ class Editor {
 		this.transform.scale = newScale;
 
 		this.hoveredObject = null;
+	}
+
+	#getSelectedObjectScaleStatus (x, y) {
+		let status = 0;
+
+		if (x > this.selectBoundingRect.x - 10 && x < this.selectBoundingRect.x + 10) {
+			status = 1;
+		}
+
+		if (x > this.selectBoundingRect.x + this.selectBoundingRect.w - 10 && x < this.selectBoundingRect.x + this.selectBoundingRect.w + 10) {
+			status = 1;
+		}
+
+		if (y > this.selectBoundingRect.y - 10 && y < this.selectBoundingRect.y + 10) {
+			status = 2;
+		}
+
+		if (y > this.selectBoundingRect.y + this.selectBoundingRect.h - 10 && y < this.selectBoundingRect.y + this.selectBoundingRect.h + 10) {
+			status = 2;
+		}
+
+		return status;
 	}
 
 	#splitKeyBind (bind) {
@@ -541,7 +597,7 @@ class Editor {
 
 		this.objects.forEach(object => object.draw(ctx));
 
-		if (this.hoveredObject) this.#drawHoveredObject(ctx);
+		if (this.hoveredObject) drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale);
 		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale);
 
 		this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale));
@@ -558,16 +614,6 @@ class Editor {
 		}
 
 		ctx.setTransform(transform);
-	}
-
-	#drawHoveredObject (ctx) {
-		ctx.globalAlpha = 0.8;
-
-		this.hoveredObject.draw(ctx);
-
-		ctx.globalAlpha = 1;
-
-		drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale);
 	}
 
 	add (object) {
