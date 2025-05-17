@@ -27,6 +27,7 @@ class Editor {
 
 		this.panStartPoint = null;
 		this.dragStartPoint = null;
+		this.dragStartOriginalPoint = null;
 
 		this.minZoomFact = 0.1;
 		this.maxZoomFact = 5;
@@ -167,12 +168,13 @@ class Editor {
 		}
 
 		if (event.button === 0) {
+			this.mousedownObject = this.#getObjectOnMouse(x, y);
+
 			if (this.selectBoundingRect && isPointInRect(this.selectBoundingRect, x, y)) {
 				this.dragStartPoint = { x: event.x, y: event.y };
+				this.dragStartOriginalPoint = { x: event.x, y: event.y };
 				return;
 			}
-
-			this.mousedownObject = this.#getObjectOnMouse(x, y);
 		}
 	}
 
@@ -222,12 +224,11 @@ class Editor {
 			return;
 		}
 
-		this.dragStartPoint = null;
-
+		const dragged = this.dragStartPoint !== null && (this.dragStartOriginalPoint.x !== this.dragStartPoint.x || this.dragStartOriginalPoint.y !== this.dragStartPoint.y);
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		const mouseupObject = this.#getObjectOnMouse(x, y);
 
-		if (this.mousedownObject && this.mousedownObject === mouseupObject) {
+		if (!dragged && this.mousedownObject && this.mousedownObject === mouseupObject) {
 			this.#updateSelectedObjects(mouseupObject);
 
 			this.mousedownObject = null;
@@ -241,6 +242,8 @@ class Editor {
 				this.#updateCursor('pointer');
 			}
 		}
+
+		this.dragStartPoint = null;
 	}
 
 	#wheel (event) {
