@@ -29,8 +29,8 @@ class Editor {
 
 		this.minZoomFact = 0.1;
 		this.maxZoomFact = 5;
-		this.editBlockZoomFact = 0.6;
 		this.prevZoom = 1;
+		this.zoomIntensity = 0.05;
 
 		this.downKeys = new Set();
 		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
@@ -154,7 +154,7 @@ class Editor {
 	#mousedown (event) {
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 
-		if (event.button === 0 && this.transform.scale > this.editBlockZoomFact) {
+		if (event.button === 0) {
 			this.mousedownObject = this.#getObjectOnMouse(x, y);
 			return;
 		}
@@ -165,9 +165,6 @@ class Editor {
 	}
 
 	#mousemove (event) {
-		if (this.prevZoom === this.transform.scale) {
-			console.log(true); // try to make zoom on point where mouse is
-		}
 		if (this.panStartPoint) {
 			this.transform.x += event.x - this.panStartPoint.x;
 			this.transform.y += event.y - this.panStartPoint.y;
@@ -182,9 +179,7 @@ class Editor {
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
 
-		if (this.transform.scale < this.editBlockZoomFact) {
-			this.#updateCursor('not-allowed');
-		} else if (this.hoveredObject) {
+		if (this.hoveredObject) {
 			this.#updateCursor('pointer');
 		} else if (this.#isMouseInSelectBoundingRect(x, y)) {
 			this.#updateCursor('move');
@@ -198,8 +193,6 @@ class Editor {
 			this.panStartPoint = null;
 			return;
 		}
-
-		if (this.transform.scale < this.editBlockZoomFact) return;
 
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 		const mouseupObject = this.#getObjectOnMouse(x, y);
@@ -221,16 +214,17 @@ class Editor {
 	}
 
 	#wheel (event) {
-		let fact = this.transform.scale * (1 + Math.sign(event.deltaY) * 0.1);
+		event.preventDefault();
 
-		if (fact > this.maxZoomFact) fact = this.maxZoomFact;
-		if (fact < this.minZoomFact) fact = this.minZoomFact;
+		const { x: worldX, y: worldY } = this.#getMouseRelativePoint(event.x, event.y);
+		const newScale = Math.min(this.maxZoomFact, Math.max(this.minZoomFact, this.transform.scale * (1 + Math.sign(event.deltaY) * this.zoomIntensity)));
+		const scaleFactor = newScale / this.transform.scale;
 
-		this.prevZoom = this.transform.scale;
-		this.transform.scale = fact;
+		this.transform.x -= (worldX * (scaleFactor - 1)) * this.transform.scale;
+		this.transform.y -= (worldY * (scaleFactor - 1)) * this.transform.scale;
+		this.transform.scale = newScale;
+
 		this.hoveredObject = null;
-
-		this.#updateCursor(fact < this.editBlockZoomFact ? 'not-allowed' : 'default');
 	}
 
 	#splitKeyBind (bind) {
@@ -384,6 +378,7 @@ class Editor {
 
 		ctx.translate(this.width * 0.5, this.height * 0.5);
 		ctx.translate(this.transform.x, this.transform.y);
+
 		ctx.scale(this.transform.scale, this.transform.scale);
 
 		this.objects.forEach(object => object.draw(ctx));
@@ -391,9 +386,9 @@ class Editor {
 		if (this.hoveredObject) this.#drawHoveredObject(ctx);
 
 		if (this.selectBoundingRect) {
-			drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select);
+			drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale);
 
-			if (this.selectedObjects.length != 1) this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select));
+			if (this.selectedObjects.length != 1) this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale));
 		}
 
 		ctx.setTransform(transform);
@@ -406,7 +401,7 @@ class Editor {
 
 		ctx.globalAlpha = 1;
 
-		drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover);
+		drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale);
 	}
 
 	update () {}

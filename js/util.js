@@ -1,43 +1,28 @@
 let EDITOR_SETTINGS = null;
-let drawDashedRectDashOffset = 0;
-let canDrawDashedRectDashOffsetPlay = true;
 
-function playDrawDashedRectDashOffset () {
-	if (!canDrawDashedRectDashOffsetPlay) return;
-
-	canDrawDashedRectDashOffsetPlay = false;
-	drawDashedRectDashOffset += 1;
-
-	setTimeout(() => {
-		canDrawDashedRectDashOffsetPlay = true;
-	}, 50);
-}
-
-function drawDashedRect (ctx, rect, color = '#ffffff') {
-	playDrawDashedRectDashOffset();
+function drawDashedRect (ctx, rect, color = '#ffffff', scale = 1) {
 	ctx.save();
 
 	ctx.strokeStyle = color;
-	ctx.lineWidth = 2;
-	ctx.lineDashOffset = drawDashedRectDashOffset;
+	ctx.lineWidth = 2 / scale;
 
-	ctx.setLineDash([5, 5]);
+	ctx.setLineDash([5 / scale, 5 / scale]);
 	ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
 
 	ctx.restore();
 }
 
-function drawSelectRect (ctx, rect, color = '#ffffff') {
+function drawSelectRect (ctx, rect, color = '#ffffff', scale = 1) {
 	ctx.save();
 
 	ctx.strokeStyle = color;
-	ctx.lineWidth = 2;
+	ctx.lineWidth = 2 / scale;
 	ctx.shadowColor = '#000000';
 	ctx.shadowBlur = 5;
 
 	ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
 
-	ctx.lineWidth = EDITOR_SETTINGS.selector_dots_size;
+	ctx.lineWidth = EDITOR_SETTINGS.selector_dots_size / scale;
 	ctx.lineCap = 'round';
 
 	ctx.beginPath();
