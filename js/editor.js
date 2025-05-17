@@ -33,7 +33,7 @@ class Editor {
 		this.zoomIntensity = 0.05;
 
 		this.downKeys = new Set();
-		this.historyManager = new TreeHistoryManager(this.#getDataForHistory());
+		this.historyManager = new TreeHistoryManager({});
 
 		this.transform = {
 			x: 0,
@@ -52,7 +52,7 @@ class Editor {
 		this.keyBinds = [
 			{
 				name: 'delete',
-				binds: ['shift+x', 'delete'],
+				binds: ['x', 'delete'],
 				action: () => {
 					this.#deleteSelected();
 				}
@@ -61,14 +61,14 @@ class Editor {
 				name: 'undo',
 				binds: ['control+z'],
 				action: () => {
-					this.#loadHistoryFromData(this.historyManager.undo());
+					// this.#loadHistoryFromData(this.historyManager.undo());
 				}
 			},
 			{
 				name: 'redo',
 				binds: ['control+y', 'control+shift+z'],
 				action: () => {
-					this.#loadHistoryFromData(this.historyManager.redo());
+					// this.#loadHistoryFromData(this.historyManager.redo());
 				}
 			}
 		];
@@ -80,8 +80,6 @@ class Editor {
 		this.add(new EditorImageObject(_tImage, 200, 200));
 		this.add(new EditorImageObject(_tImage, 0, -200));
 		this.add(new EditorImageObject(_tImage, -200, -200));
-
-		this.#updateHistory();
 	}
 
 	#initEvents () {
@@ -154,13 +152,13 @@ class Editor {
 	#mousedown (event) {
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
 
-		if (event.button === 0) {
-			this.mousedownObject = this.#getObjectOnMouse(x, y);
+		if (event.button === 2 || (this.downKeys.has('alt') && event.button === 0)) {
+			this.panStartPoint = { x: event.x, y: event.y };
 			return;
 		}
 
-		if (event.button === 2) {
-			this.panStartPoint = { x: event.x, y: event.y };
+		if (event.button === 0) {
+			this.mousedownObject = this.#getObjectOnMouse(x, y);
 		}
 	}
 
@@ -189,7 +187,7 @@ class Editor {
 	}
 
 	#mouseup (event) {
-		if (event.button === 2) {
+		if (event.button === 2 || (this.downKeys.has('alt') && event.button === 0)) {
 			this.panStartPoint = null;
 			return;
 		}
@@ -351,22 +349,10 @@ class Editor {
 
 		this.selectedObjects.length = 0;
 		this.selectBoundingRect = null;
-
-		this.#updateHistory();
 	}
 
-	#getDataForHistory () {
-		return {
-			objects: this.objects.map(object => object)
-		};
-	}
-
-	#loadHistoryFromData (data) {
-		this.objects = data.objects;
-	}
-
-	#updateHistory () {
-		this.historyManager.change(this.#getDataForHistory());
+	#updateHistory (historyObject) {
+		this.historyManager.change(historyObject);
 	}
 
 	draw (ctx) {
