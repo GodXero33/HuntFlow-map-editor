@@ -128,9 +128,14 @@ class Editor {
 					this.localClipboard.forEach(object => {
 						const clone = object.clone();
 
+						clone.x += this.clipboardImagePlaceOffset;
+						clone.y += this.clipboardImagePlaceOffset;
+
 						this.objects.push(clone);
 						this.selectedObjects.push(clone);
 					});
+
+					this.clipboardImagePlaceOffset = (this.clipboardImagePlaceOffset + 20) % 100;
 
 					this.#updateSelectBoundingRect();
 				}
@@ -140,6 +145,7 @@ class Editor {
 				binds: ['c'],
 				action: () => {
 					this.localClipboard = this.selectedObjects.map(object => object.clone());
+					this.clipboardImagePlaceOffset = 20;
 				}
 			},
 			{
@@ -153,7 +159,6 @@ class Editor {
 	}
 
 	addDummies () {
-		this.add(new EditorImageObject(_tImage, 0, 0));
 		this.add(new EditorImageObject(_tImage, 200, 0));
 		this.add(new EditorImageObject(_tImage, 200, 200));
 		this.add(new EditorImageObject(_tImage, 0, -200));
