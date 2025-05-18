@@ -1,26 +1,28 @@
 let EDITOR_SETTINGS = null;
 
-function drawDashedRect (ctx, rect, color = '#ffffff', scale = 1) {
+function drawDashedRect (ctx, rect, color = '#ffffff', scale = 1, lineSize = 5) {
 	ctx.save();
 
 	ctx.strokeStyle = color;
-	ctx.lineWidth = 5 / scale;
+	ctx.lineWidth = lineSize / scale;
 
-	ctx.setLineDash([5 / scale, 5 / scale]);
+	ctx.setLineDash([lineSize / scale, lineSize * 2 / scale]);
 	ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
 
 	ctx.restore();
 }
 
-function drawSelectRect (ctx, rect, color = '#ffffff', scale = 1) {
+function drawSelectRect (ctx, rect, color = '#ffffff', scale = 1, lineSize = 5) {
 	ctx.save();
 
 	ctx.strokeStyle = color;
-	ctx.lineWidth = 5 / scale;
+	ctx.lineWidth = lineSize / scale;
 	ctx.shadowColor = '#000000';
-	ctx.shadowBlur = 5;
+	ctx.shadowBlur = lineSize;
 
 	ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+
+	ctx.restore();
 }
 
 function isPointInRect (rect, x, y, offset = 0) {

@@ -51,6 +51,8 @@ class Editor {
 		this.clipboardImagePlaceOffset = 0;
 		this.localClipboard = null;
 		this.mouse = { x: 0, y: 0 };
+		this.isSelectedRotating = false;
+		this.prevSelectedObjectsRotation = 0;
 
 		this.#defineKeyBinds();
 		this.#initEvents();
@@ -83,8 +85,6 @@ class Editor {
 				action: () => {
 					if (this.selectedObjectScaleStatus) {
 						this.#updateSelectedObjectsScaleStatus(this.selectedObjectScaleStatus.status === 3 ? 2 : 3, this.mouse.x, this.mouse.y, true);
-					} else {
-						this.#deleteSelected();
 					}
 				}
 			},
@@ -153,6 +153,16 @@ class Editor {
 				binds: ['s'],
 				action: () => {
 					this.#updateSelectedObjectsScaleStatus(3, this.mouse.x, this.mouse.y, true);
+				}
+			},
+			{
+				name: 'rotate',
+				binds: ['r'],
+				action: () => {
+					if (this.selectedObjects.length == 0) return;
+
+					this.isSelectedRotating = true;
+					this.prevSelectedObjectsRotation = Math.atan2(this.selectBoundingRect.y + this.selectBoundingRect.h * 0.5 - this.mouse.y, this.selectBoundingRect.x + this.selectBoundingRect.w * 0.5 - this.mouse.x);
 				}
 			}
 		];
@@ -395,6 +405,15 @@ class Editor {
 			return;
 		}
 
+		if (this.isSelectedRotating) {
+			const angle = Math.atan2(this.selectBoundingRect.y + this.selectBoundingRect.h * 0.5 - y, this.selectBoundingRect.x + this.selectBoundingRect.w * 0.5 - x);
+
+			this.selectedObjects.forEach(object => object.rotate(angle - this.prevSelectedObjectsRotation));
+
+			this.prevSelectedObjectsRotation = angle;
+			return;
+		}
+
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
@@ -443,6 +462,7 @@ class Editor {
 		this.selectionStartPoint = null;
 		this.selectionRect = null;
 		this.selectedObjectScaleStatus = null;
+		this.isSelectedRotating = false;
 	}
 
 	#wheel (event) {
@@ -645,11 +665,14 @@ class Editor {
 	}
 
 	draw (ctx) {
+		const basicLineSize = EDITOR_SETTINGS.basicLineSize;
+		const boldLineSize = EDITOR_SETTINGS.boldLineSize;
+
 		ctx.fillStyle = EDITOR_SETTINGS.colors.background;
 
 		ctx.fillRect(0, 0, this.width, this.height);
 
-		const transform = ctx.getTransform();
+		ctx.save();
 
 		ctx.translate(this.width * 0.5, this.height * 0.5);
 		ctx.translate(this.transform.x, this.transform.y);
@@ -658,15 +681,15 @@ class Editor {
 
 		this.objects.forEach(object => object.draw(ctx));
 
-		if (this.hoveredObject) drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale);
-		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale);
+		if (this.hoveredObject) drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale, boldLineSize);
+		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale, boldLineSize);
 
-		this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale));
+		this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale, boldLineSize));
 
 		if (this.selectionRect) {
-			ctx.strokeStyle = '#f0f';
-			ctx.fillStyle = '#f0f2';
-			ctx.lineWidth = 2 / this.transform.scale;
+			ctx.strokeStyle = EDITOR_SETTINGS.colors.selectionRectBorder;
+			ctx.fillStyle = EDITOR_SETTINGS.colors.selectionRectBackground;
+			ctx.lineWidth = basicLineSize / this.transform.scale;
 
 			ctx.beginPath();
 			ctx.rect(this.selectionRect.x, this.selectionRect.y, this.selectionRect.w, this.selectionRect.h);
@@ -674,7 +697,18 @@ class Editor {
 			ctx.stroke();
 		}
 
-		ctx.setTransform(transform);
+		if (this.isSelectedRotating) {
+			ctx.strokeStyle = EDITOR_SETTINGS.colors.select;
+			ctx.lineWidth = basicLineSize / this.transform.scale;
+			ctx.setLineDash([basicLineSize / this.transform.scale, basicLineSize * 2 / this.transform.scale]);
+
+			ctx.beginPath();
+			ctx.moveTo(this.selectBoundingRect.x + this.selectBoundingRect.w * 0.5, this.selectBoundingRect.y + this.selectBoundingRect.w * 0.5);
+			ctx.lineTo(this.mouse.x, this.mouse.y);
+			ctx.stroke();
+		}
+
+		ctx.restore();
 	}
 
 	add (object) {
