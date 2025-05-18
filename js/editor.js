@@ -50,6 +50,9 @@ class Editor {
 
 		this.clipboardImagePlaceOffset = 0;
 		this.localClipboard = null;
+		this.mouse = { x: 0, y: 0 };
+		this.isSelectedRotating = false;
+		this.prevSelectedObjectsRotation = 0;
 
 		this.#defineKeyBinds();
 		this.#initEvents();
@@ -69,7 +72,20 @@ class Editor {
 				name: 'x',
 				binds: ['x'],
 				action: () => {
-					this.#deleteSelected();
+					if (this.selectedObjectScaleStatus) {
+						this.#updateSelectedObjectsScaleStatus(this.selectedObjectScaleStatus.status === 3 ? 1 : 3, this.mouse.x, this.mouse.y, true);
+					} else {
+						this.#deleteSelected();
+					}
+				}
+			},
+			{
+				name: 'y',
+				binds: ['y'],
+				action: () => {
+					if (this.selectedObjectScaleStatus) {
+						this.#updateSelectedObjectsScaleStatus(this.selectedObjectScaleStatus.status === 3 ? 2 : 3, this.mouse.x, this.mouse.y, true);
+					}
 				}
 			},
 			{
@@ -112,9 +128,14 @@ class Editor {
 					this.localClipboard.forEach(object => {
 						const clone = object.clone();
 
+						clone.x += this.clipboardImagePlaceOffset;
+						clone.y += this.clipboardImagePlaceOffset;
+
 						this.objects.push(clone);
 						this.selectedObjects.push(clone);
 					});
+
+					this.clipboardImagePlaceOffset = (this.clipboardImagePlaceOffset + 20) % 100;
 
 					this.#updateSelectBoundingRect();
 				}
@@ -124,13 +145,30 @@ class Editor {
 				binds: ['c'],
 				action: () => {
 					this.localClipboard = this.selectedObjects.map(object => object.clone());
+					this.clipboardImagePlaceOffset = 20;
+				}
+			},
+			{
+				name: 'scale',
+				binds: ['s'],
+				action: () => {
+					this.#updateSelectedObjectsScaleStatus(3, this.mouse.x, this.mouse.y, true);
+				}
+			},
+			{
+				name: 'rotate',
+				binds: ['r'],
+				action: () => {
+					if (this.selectedObjects.length == 0) return;
+
+					this.isSelectedRotating = true;
+					this.prevSelectedObjectsRotation = Math.atan2(this.selectBoundingRect.y + this.selectBoundingRect.h * 0.5 - this.mouse.y, this.selectBoundingRect.x + this.selectBoundingRect.w * 0.5 - this.mouse.x);
 				}
 			}
 		];
 	}
 
 	addDummies () {
-		this.add(new EditorImageObject(_tImage, 0, 0));
 		this.add(new EditorImageObject(_tImage, 200, 0));
 		this.add(new EditorImageObject(_tImage, 200, 200));
 		this.add(new EditorImageObject(_tImage, 0, -200));
@@ -257,11 +295,10 @@ class Editor {
 
 		if (event.button === 0) {
 			if (this.selectedObjects.length !== 0) {
-				let selectedObjectScale = this.#getSelectedObjectScaleStatus(x, y);
+				let selectedObjectScaleStatus = this.#getSelectedObjectScaleStatus(x, y);
 
-				if (selectedObjectScale) {
-					this.#updateCursor(selectedObjectScale == 1 ? 'ew-resize' : 'ns-resize');
-					this.selectedObjectScaleStatus = { x, y };
+				if (selectedObjectScaleStatus) {
+					this.#updateSelectedObjectsScaleStatus(selectedObjectScaleStatus, x, y, true);
 					return;
 				}
 			}
@@ -280,12 +317,29 @@ class Editor {
 
 	#mousemove (event) {
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
+		this.mouse.x = x;
+		this.mouse.y = y;
 
 		if (this.selectedObjectScaleStatus) {
-			const dx = x - this.selectedObjectScaleStatus.x;
-			const dy = y - this.selectedObjectScaleStatus.y;
-			this.selectedObjectScaleStatus.x = x;
-			this.selectedObjectScaleStatus.y = y;
+			let dx = 0;
+			let dy = 0;
+
+			if (this.selectedObjectScaleStatus.status == 1) {
+				dx = x - this.selectedObjectScaleStatus.x;
+				this.selectedObjectScaleStatus.x = x;
+			}
+
+			if (this.selectedObjectScaleStatus.status == 2) {
+				dy = y - this.selectedObjectScaleStatus.y;
+				this.selectedObjectScaleStatus.y = y;
+			}
+
+			if (this.selectedObjectScaleStatus.status == 3) {
+				dx = x - this.selectedObjectScaleStatus.x;
+				dy = y - this.selectedObjectScaleStatus.y;
+				this.selectedObjectScaleStatus.x = x;
+				this.selectedObjectScaleStatus.y = y;
+			}
 
 			this.selectedObjects.forEach(object => object.scale(dx, dy));
 			this.#updateSelectBoundingRect();
@@ -351,18 +405,19 @@ class Editor {
 			return;
 		}
 
+		if (this.isSelectedRotating) {
+			const angle = Math.atan2(this.selectBoundingRect.y + this.selectBoundingRect.h * 0.5 - y, this.selectBoundingRect.x + this.selectBoundingRect.w * 0.5 - x);
+
+			this.selectedObjects.forEach(object => object.rotate(angle - this.prevSelectedObjectsRotation));
+
+			this.prevSelectedObjectsRotation = angle;
+			return;
+		}
+
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
-
-		if (this.selectedObjects.length !== 0) {
-			let selectedObjectScale = this.#getSelectedObjectScaleStatus(x, y);
-
-			if (selectedObjectScale) {
-				this.#updateCursor(selectedObjectScale == 1 ? 'ew-resize' : 'ns-resize');
-				return;
-			}
-		}
+		if (this.#updateSelectedObjectsScaleStatus(this.#getSelectedObjectScaleStatus(x, y), x, y)) return;
 
 		if (this.hoveredObject) {
 			this.#updateCursor('pointer');
@@ -407,6 +462,7 @@ class Editor {
 		this.selectionStartPoint = null;
 		this.selectionRect = null;
 		this.selectedObjectScaleStatus = null;
+		this.isSelectedRotating = false;
 	}
 
 	#wheel (event) {
@@ -424,25 +480,38 @@ class Editor {
 	}
 
 	#getSelectedObjectScaleStatus (x, y) {
-		let status = 0;
+		if (this.selectedObjects.length == 0) return -1;
 
-		if (x > this.selectBoundingRect.x - 10 && x < this.selectBoundingRect.x + 10) {
-			status = 1;
+		const triggerWidth = 10;
+
+		if (
+			(x > this.selectBoundingRect.x - triggerWidth && x < this.selectBoundingRect.x + triggerWidth) ||
+			(x > this.selectBoundingRect.x + this.selectBoundingRect.w - triggerWidth && x < this.selectBoundingRect.x + this.selectBoundingRect.w + triggerWidth)
+		) return 1;
+
+		if (
+			(y > this.selectBoundingRect.y - triggerWidth && y < this.selectBoundingRect.y + triggerWidth) ||
+			(y > this.selectBoundingRect.y + this.selectBoundingRect.h - triggerWidth && y < this.selectBoundingRect.y + this.selectBoundingRect.h + triggerWidth)
+		) return 2;
+	}
+
+	#updateSelectedObjectsScaleStatus (status, x, y, updateStatus = false) {
+		if (status == -1 || this.selectedObjects.length == 0) return false;
+
+		let cursor;
+
+		switch (status) {
+			case 1: cursor = 'ew-resize'; break;
+			case 2: cursor = 'ns-resize'; break;
+			case 3: cursor = 'crosshair'; break;
+			default: cursor = this.#isMouseInSelectBoundingRect(x, y) ? 'move' : 'default';
 		}
 
-		if (x > this.selectBoundingRect.x + this.selectBoundingRect.w - 10 && x < this.selectBoundingRect.x + this.selectBoundingRect.w + 10) {
-			status = 1;
-		}
+		this.#updateCursor(cursor);
 
-		if (y > this.selectBoundingRect.y - 10 && y < this.selectBoundingRect.y + 10) {
-			status = 2;
-		}
+		if (updateStatus) this.selectedObjectScaleStatus = { status, x, y };
 
-		if (y > this.selectBoundingRect.y + this.selectBoundingRect.h - 10 && y < this.selectBoundingRect.y + this.selectBoundingRect.h + 10) {
-			status = 2;
-		}
-
-		return status;
+		return cursor !== 'move' || cursor !== 'default';
 	}
 
 	#splitKeyBind (bind) {
@@ -596,11 +665,14 @@ class Editor {
 	}
 
 	draw (ctx) {
+		const basicLineSize = EDITOR_SETTINGS.basicLineSize;
+		const boldLineSize = EDITOR_SETTINGS.boldLineSize;
+
 		ctx.fillStyle = EDITOR_SETTINGS.colors.background;
 
 		ctx.fillRect(0, 0, this.width, this.height);
 
-		const transform = ctx.getTransform();
+		ctx.save();
 
 		ctx.translate(this.width * 0.5, this.height * 0.5);
 		ctx.translate(this.transform.x, this.transform.y);
@@ -609,15 +681,15 @@ class Editor {
 
 		this.objects.forEach(object => object.draw(ctx));
 
-		if (this.hoveredObject) drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale);
-		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale);
+		if (this.hoveredObject) drawSelectRect(ctx, this.hoveredObject, EDITOR_SETTINGS.colors.hover, this.transform.scale, boldLineSize);
+		if (this.selectBoundingRect) drawSelectRect(ctx, this.selectBoundingRect, EDITOR_SETTINGS.colors.select, this.transform.scale, boldLineSize);
 
-		this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale));
+		this.selectedObjects.forEach(object => drawDashedRect(ctx, object, EDITOR_SETTINGS.colors.select, this.transform.scale, boldLineSize));
 
 		if (this.selectionRect) {
-			ctx.strokeStyle = '#f0f';
-			ctx.fillStyle = '#f0f2';
-			ctx.lineWidth = 2 / this.transform.scale;
+			ctx.strokeStyle = EDITOR_SETTINGS.colors.selectionRectBorder;
+			ctx.fillStyle = EDITOR_SETTINGS.colors.selectionRectBackground;
+			ctx.lineWidth = basicLineSize / this.transform.scale;
 
 			ctx.beginPath();
 			ctx.rect(this.selectionRect.x, this.selectionRect.y, this.selectionRect.w, this.selectionRect.h);
@@ -625,7 +697,18 @@ class Editor {
 			ctx.stroke();
 		}
 
-		ctx.setTransform(transform);
+		if (this.isSelectedRotating) {
+			ctx.strokeStyle = EDITOR_SETTINGS.colors.select;
+			ctx.lineWidth = basicLineSize / this.transform.scale;
+			ctx.setLineDash([basicLineSize / this.transform.scale, basicLineSize * 2 / this.transform.scale]);
+
+			ctx.beginPath();
+			ctx.moveTo(this.selectBoundingRect.x + this.selectBoundingRect.w * 0.5, this.selectBoundingRect.y + this.selectBoundingRect.w * 0.5);
+			ctx.lineTo(this.mouse.x, this.mouse.y);
+			ctx.stroke();
+		}
+
+		ctx.restore();
 	}
 
 	add (object) {
