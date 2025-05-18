@@ -50,6 +50,7 @@ class Editor {
 
 		this.clipboardImagePlaceOffset = 0;
 		this.localClipboard = null;
+		this.mouse = { x: 0, y: 0 };
 
 		this.#defineKeyBinds();
 		this.#initEvents();
@@ -69,7 +70,22 @@ class Editor {
 				name: 'x',
 				binds: ['x'],
 				action: () => {
-					this.#deleteSelected();
+					if (this.selectedObjectScaleStatus) {
+						this.#updateSelectedObjectsScaleStatus(this.selectedObjectScaleStatus.status === 3 ? 1 : 3, this.mouse.x, this.mouse.y, true);
+					} else {
+						this.#deleteSelected();
+					}
+				}
+			},
+			{
+				name: 'y',
+				binds: ['y'],
+				action: () => {
+					if (this.selectedObjectScaleStatus) {
+						this.#updateSelectedObjectsScaleStatus(this.selectedObjectScaleStatus.status === 3 ? 2 : 3, this.mouse.x, this.mouse.y, true);
+					} else {
+						this.#deleteSelected();
+					}
 				}
 			},
 			{
@@ -124,6 +140,13 @@ class Editor {
 				binds: ['c'],
 				action: () => {
 					this.localClipboard = this.selectedObjects.map(object => object.clone());
+				}
+			},
+			{
+				name: 'scale',
+				binds: ['s'],
+				action: () => {
+					this.#updateSelectedObjectsScaleStatus(3, this.mouse.x, this.mouse.y, true);
 				}
 			}
 		];
@@ -257,11 +280,10 @@ class Editor {
 
 		if (event.button === 0) {
 			if (this.selectedObjects.length !== 0) {
-				let selectedObjectScale = this.#getSelectedObjectScaleStatus(x, y);
+				let selectedObjectScaleStatus = this.#getSelectedObjectScaleStatus(x, y);
 
-				if (selectedObjectScale) {
-					this.#updateCursor(selectedObjectScale == 1 ? 'ew-resize' : 'ns-resize');
-					this.selectedObjectScaleStatus = { x, y };
+				if (selectedObjectScaleStatus) {
+					this.#updateSelectedObjectsScaleStatus(selectedObjectScaleStatus, x, y, true);
 					return;
 				}
 			}
@@ -280,12 +302,29 @@ class Editor {
 
 	#mousemove (event) {
 		const { x, y } = this.#getMouseRelativePoint(event.x, event.y);
+		this.mouse.x = x;
+		this.mouse.y = y;
 
 		if (this.selectedObjectScaleStatus) {
-			const dx = x - this.selectedObjectScaleStatus.x;
-			const dy = y - this.selectedObjectScaleStatus.y;
-			this.selectedObjectScaleStatus.x = x;
-			this.selectedObjectScaleStatus.y = y;
+			let dx = 0;
+			let dy = 0;
+
+			if (this.selectedObjectScaleStatus.status == 1) {
+				dx = x - this.selectedObjectScaleStatus.x;
+				this.selectedObjectScaleStatus.x = x;
+			}
+
+			if (this.selectedObjectScaleStatus.status == 2) {
+				dy = y - this.selectedObjectScaleStatus.y;
+				this.selectedObjectScaleStatus.y = y;
+			}
+
+			if (this.selectedObjectScaleStatus.status == 3) {
+				dx = x - this.selectedObjectScaleStatus.x;
+				dy = y - this.selectedObjectScaleStatus.y;
+				this.selectedObjectScaleStatus.x = x;
+				this.selectedObjectScaleStatus.y = y;
+			}
 
 			this.selectedObjects.forEach(object => object.scale(dx, dy));
 			this.#updateSelectBoundingRect();
@@ -354,15 +393,7 @@ class Editor {
 		this.hoveredObject = this.#getObjectOnMouse(x, y);
 
 		if (this.selectedObjects.includes(this.hoveredObject)) this.hoveredObject = null;
-
-		if (this.selectedObjects.length !== 0) {
-			let selectedObjectScale = this.#getSelectedObjectScaleStatus(x, y);
-
-			if (selectedObjectScale) {
-				this.#updateCursor(selectedObjectScale == 1 ? 'ew-resize' : 'ns-resize');
-				return;
-			}
-		}
+		if (this.#updateSelectedObjectsScaleStatus(this.#getSelectedObjectScaleStatus(x, y), x, y)) return;
 
 		if (this.hoveredObject) {
 			this.#updateCursor('pointer');
@@ -424,25 +455,38 @@ class Editor {
 	}
 
 	#getSelectedObjectScaleStatus (x, y) {
-		let status = 0;
+		if (this.selectedObjects.length == 0) return -1;
 
-		if (x > this.selectBoundingRect.x - 10 && x < this.selectBoundingRect.x + 10) {
-			status = 1;
+		const triggerWidth = 10;
+
+		if (
+			(x > this.selectBoundingRect.x - triggerWidth && x < this.selectBoundingRect.x + triggerWidth) ||
+			(x > this.selectBoundingRect.x + this.selectBoundingRect.w - triggerWidth && x < this.selectBoundingRect.x + this.selectBoundingRect.w + triggerWidth)
+		) return 1;
+
+		if (
+			(y > this.selectBoundingRect.y - triggerWidth && y < this.selectBoundingRect.y + triggerWidth) ||
+			(y > this.selectBoundingRect.y + this.selectBoundingRect.h - triggerWidth && y < this.selectBoundingRect.y + this.selectBoundingRect.h + triggerWidth)
+		) return 2;
+	}
+
+	#updateSelectedObjectsScaleStatus (status, x, y, updateStatus = false) {
+		if (status == -1 || this.selectedObjects.length == 0) return false;
+
+		let cursor;
+
+		switch (status) {
+			case 1: cursor = 'ew-resize'; break;
+			case 2: cursor = 'ns-resize'; break;
+			case 3: cursor = 'crosshair'; break;
+			default: cursor = this.#isMouseInSelectBoundingRect(x, y) ? 'move' : 'default';
 		}
 
-		if (x > this.selectBoundingRect.x + this.selectBoundingRect.w - 10 && x < this.selectBoundingRect.x + this.selectBoundingRect.w + 10) {
-			status = 1;
-		}
+		this.#updateCursor(cursor);
 
-		if (y > this.selectBoundingRect.y - 10 && y < this.selectBoundingRect.y + 10) {
-			status = 2;
-		}
+		if (updateStatus) this.selectedObjectScaleStatus = { status, x, y };
 
-		if (y > this.selectBoundingRect.y + this.selectBoundingRect.h - 10 && y < this.selectBoundingRect.y + this.selectBoundingRect.h + 10) {
-			status = 2;
-		}
-
-		return status;
+		return cursor !== 'move' || cursor !== 'default';
 	}
 
 	#splitKeyBind (bind) {
